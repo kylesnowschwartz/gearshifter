@@ -6,6 +6,7 @@ package catalog
 
 import (
 	"sort"
+	"strings"
 )
 
 // Source identifies where a command definition came from. Precedence for
@@ -42,6 +43,14 @@ type Command struct {
 	Source       string
 	Path         string // definition file; empty for builtins
 	MinVersion   string // builtins only
+}
+
+// RequiresArgument reports whether the command's argument hint marks a
+// required argument, by the docs convention `<required>` vs `[optional]`.
+// Drives the palette's hint-aware Enter policy: required-arg commands are
+// inserted with a trailing space instead of submitted bare.
+func (c Command) RequiresArgument() bool {
+	return strings.HasPrefix(strings.TrimSpace(c.ArgumentHint), "<")
 }
 
 // Options configures Build.

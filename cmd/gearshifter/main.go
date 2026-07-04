@@ -139,7 +139,16 @@ func runPick(args []string) error {
 	if !ok {
 		return nil // cancelled: zero side effects
 	}
-	return client.Inject(*pane, "/"+sel.Name, tmux.InjectOptions{})
+	// Hint-aware Enter policy: commands with a required argument (`<...>`
+	// hint) are inserted with a trailing space, ready for typing, instead
+	// of submitted bare (which misfires — e.g. /btw with no question).
+	text := "/" + sel.Name
+	opts := tmux.InjectOptions{}
+	if sel.RequiresArgument() {
+		text += " "
+		opts.NoEnter = true
+	}
+	return client.Inject(*pane, text, opts)
 }
 
 func runInject(args []string) error {

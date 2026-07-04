@@ -167,3 +167,22 @@ func TestBuiltinsDescriptionsAreClean(t *testing.T) {
 		}
 	}
 }
+
+func TestRequiresArgument(t *testing.T) {
+	cases := []struct {
+		hint string
+		want bool
+	}{
+		{"<question>", true},
+		{" <instruction>", true},
+		{"[model|off]", false},
+		{"[prompt]", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		got := Command{ArgumentHint: tc.hint}.RequiresArgument()
+		if got != tc.want {
+			t.Errorf("RequiresArgument(%q) = %v, want %v", tc.hint, got, tc.want)
+		}
+	}
+}
