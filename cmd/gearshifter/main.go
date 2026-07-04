@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/kylesnowschwartz/gearshifter/internal/app"
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 	"github.com/kylesnowschwartz/gearshifter/internal/palette"
 	"github.com/kylesnowschwartz/gearshifter/internal/tmux"
@@ -19,11 +20,12 @@ import (
 var version = "dev" // set via -ldflags at release time
 
 // Inbuilt layout names for the pick UI. telescope is the original
-// fullscreen searchable palette (M2). The deck grid joins in M3, takes
-// over as the default, and custom layout.toml paths resolve here too;
+// fullscreen searchable palette (M2); deck is the M3 tile grid (becomes
+// the default at M3 close). Custom layout.toml paths resolve here too;
 // telescope stays available as a user toggle.
 const (
 	layoutTelescope = "telescope"
+	layoutDeck      = "deck"
 	defaultLayout   = layoutTelescope
 )
 
@@ -125,12 +127,12 @@ func runPick(args []string) error {
 	pane := fs.String("pane", "", "target tmux pane id (e.g. %12); required")
 	cwd := fs.String("cwd", "", "directory for project-scoped commands; pass the target pane's cwd")
 	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
-	layout := fs.String("layout", defaultLayout, "UI layout to open (inbuilt: telescope)")
+	layout := fs.String("layout", defaultLayout, "UI layout to open (inbuilt: telescope, deck)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *layout != layoutTelescope {
-		return fmt.Errorf("pick: unknown layout %q (inbuilt: %s)", *layout, layoutTelescope)
+	if *layout != layoutTelescope && *layout != layoutDeck {
+		return fmt.Errorf("pick: unknown layout %q (inbuilt: %s, %s)", *layout, layoutTelescope, layoutDeck)
 	}
 	if os.Getenv("TMUX") == "" {
 		return fmt.Errorf("pick: must run inside tmux (use `just popup` or a keybinding)")
@@ -148,12 +150,26 @@ func runPick(args []string) error {
 		return err
 	}
 
-	final, err := tea.NewProgram(palette.New(cmds)).Run()
-	if err != nil {
-		return fmt.Errorf("pick: %w", err)
+	var sel catalog.Command
+	var ok, insertOnly bool
+	switch *layout {
+	case layoutDeck:
+		final, err := tea.NewProgram(app.New(cmds)).Run()
+		if err != nil {
+			return fmt.Errorf("pick: %w", err)
+		}
+		model := final.(app.Model)
+		sel, ok = model.Selection()
+		insertOnly = model.InsertOnly()
+	default: // telescope
+		final, err := tea.NewProgram(palette.New(cmds)).Run()
+		if err != nil {
+			return fmt.Errorf("pick: %w", err)
+		}
+		model := final.(palette.Model)
+		sel, ok = model.Selection()
+		insertOnly = model.InsertOnly()
 	}
-	model := final.(palette.Model)
-	sel, ok := model.Selection()
 	if !ok {
 		return nil // cancelled: zero side effects
 	}
@@ -163,7 +179,7 @@ func runPick(args []string) error {
 	// Tab requests the same insert-only treatment explicitly.
 	text := "/" + sel.Name
 	opts := tmux.InjectOptions{}
-	if sel.RequiresArgument() || model.InsertOnly() {
+	if sel.RequiresArgument() || insertOnly {
 		text += " "
 		opts.NoEnter = true
 	}
