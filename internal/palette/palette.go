@@ -176,21 +176,30 @@ func (m Model) View() tea.View {
 }
 
 // renderRow lays out one visible row: /name + argument hint left, source
-// badge right-aligned, truncated to the popup width.
+// badge right-aligned, truncated to the popup width. The cursor row is
+// composed WITHOUT inner styles — their ANSI resets would terminate the
+// highlight mid-row — then styled once over the full width.
 func (m Model) renderRow(i int) string {
 	c := m.commands[m.visible[i]]
-	badge := "[" + c.Source + "]"
+	focused := i == m.cursor
+	style := func(s lipgloss.Style, text string) string {
+		if focused {
+			return text
+		}
+		return s.Render(text)
+	}
+	badge := style(badgeStyle, "["+c.Source+"]")
 	left := "/" + c.Name
 	if c.ArgumentHint != "" {
-		left += " " + hintStyle.Render(c.ArgumentHint)
+		left += " " + style(hintStyle, c.ArgumentHint)
 	}
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(badge) - 1
 	if gap < 1 {
 		left = lipgloss.NewStyle().MaxWidth(max(m.width-lipgloss.Width(badge)-2, 8)).Render(left)
 		gap = max(m.width-lipgloss.Width(left)-lipgloss.Width(badge)-1, 1)
 	}
-	row := left + strings.Repeat(" ", gap) + badgeStyle.Render(badge)
-	if i == m.cursor {
+	row := left + strings.Repeat(" ", gap) + badge
+	if focused {
 		return cursorStyle.Render(row)
 	}
 	return row
