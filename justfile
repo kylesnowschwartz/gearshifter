@@ -17,9 +17,9 @@ build:
 ls cwd=invocation_directory(): build
     @bin/gearshifter list --cwd "{{cwd}}" | awk -F'\t' -v w="$(tput cols)" 'BEGIN{d=w-58; if(d<20)d=20} {printf "%-28s %-8s %-16.16s %.*s\n", $1, $2, $3, d, $4}'
 
-# Open the fzf command palette in a tmux popup; selecting a command injects it into the pane the popup was launched from (pre-M2 stand-in for the real TUI)
+# Open the gearshifter palette in a tmux popup; selecting a command injects it into the pane the popup was launched from
 popup: build
-    tmux display-popup -E -w 70% -h 60% "cd {{justfile_directory()}} && bin/gearshifter list --cwd '#{pane_current_path}' | fzf --delimiter '\t' --with-nth 1 --preview 'echo {2}: {4}' --preview-window down,4,wrap | cut -f1 | sed 's|^|/|' | xargs -r -I CMD bin/gearshifter inject --pane '#{pane_id}' CMD"
+    tmux display-popup -E -w 70% -h 60% "{{justfile_directory()}}/bin/gearshifter pick --pane '#{pane_id}' --cwd '#{pane_current_path}'"
 
 # {{pane}}: target tmux pane id; find it by running `tmux display -p '#{{pane_id}}'` in that pane
 # {{text}}: text to inject (defaults to /context)

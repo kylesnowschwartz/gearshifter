@@ -9,7 +9,10 @@ import (
 	"os/exec"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/palette"
 	"github.com/kylesnowschwartz/gearshifter/internal/tmux"
 )
 
@@ -18,11 +21,15 @@ var version = "dev" // set via -ldflags at release time
 const usage = `gearshifter — a tmux control deck for Claude Code slash commands
 
 Usage:
+  gearshifter pick --pane PANE [--cwd DIR] [--sources ...]
   gearshifter list [--cwd DIR] [--sources user,project,builtin,plugin]
   gearshifter inject --pane PANE [--no-enter] [--no-clear] TEXT
   gearshifter version
 
 Subcommands:
+  pick     Open the interactive command palette (run it inside
+           tmux display-popup); selecting a command injects it into
+           the target pane and presses Enter.
   list     Print the available slash commands as TSV: name, source,
            argument hint, description. Default sources are
            user,project,builtin; add plugin explicitly to include
@@ -39,6 +46,8 @@ func main() {
 	}
 	var err error
 	switch os.Args[1] {
+	case "pick":
+		err = runPick(os.Args[2:])
 	case "list":
 		err = runList(os.Args[2:])
 	case "inject":
@@ -64,27 +73,7 @@ func runList(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *cwd == "" {
-		*cwd, _ = os.Getwd()
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	opts := catalog.Options{
-		Home:          home,
-		ProjectDir:    *cwd,
-		ClaudeVersion: detectClaudeVersion(),
-	}
-	if *sources != "" {
-		opts.Sources = map[string]bool{}
-		for _, s := range strings.Split(*sources, ",") {
-			opts.Sources[strings.TrimSpace(s)] = true
-		}
-	}
-
-	cmds, err := catalog.Build(opts)
+	cmds, err := buildCatalog(*cwd, *sources)
 	if err != nil {
 		return err
 	}
@@ -92,6 +81,65 @@ func runList(args []string) error {
 		fmt.Printf("%s\t%s\t%s\t%s\n", c.Name, c.Source, c.ArgumentHint, c.Description)
 	}
 	return nil
+}
+
+// buildCatalog assembles catalog.Options from the shared --cwd/--sources
+// flag values and builds the command list. cwd defaults to the current
+// directory; empty sources means the catalog default (user,project,builtin).
+func buildCatalog(cwd, sources string) ([]catalog.Command, error) {
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	opts := catalog.Options{
+		Home:          home,
+		ProjectDir:    cwd,
+		ClaudeVersion: detectClaudeVersion(),
+	}
+	if sources != "" {
+		opts.Sources = map[string]bool{}
+		for _, s := range strings.Split(sources, ",") {
+			opts.Sources[strings.TrimSpace(s)] = true
+		}
+	}
+	return catalog.Build(opts)
+}
+
+// runPick opens the palette TUI and injects the chosen command into the
+// target pane. Meant to run inside `tmux display-popup -E`.
+func runPick(args []string) error {
+	fs := flag.NewFlagSet("pick", flag.ExitOnError)
+	pane := fs.String("pane", "", "target tmux pane id (e.g. %12); required")
+	cwd := fs.String("cwd", "", "directory for project-scoped commands; pass the target pane's cwd")
+	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *pane == "" {
+		return fmt.Errorf("pick: --pane is required")
+	}
+
+	client := tmux.NewClient(nil)
+	if !client.PaneExists(*pane) {
+		return fmt.Errorf("pick: pane %s not found", *pane)
+	}
+	cmds, err := buildCatalog(*cwd, *sources)
+	if err != nil {
+		return err
+	}
+
+	final, err := tea.NewProgram(palette.New(cmds)).Run()
+	if err != nil {
+		return fmt.Errorf("pick: %w", err)
+	}
+	sel, ok := final.(palette.Model).Selection()
+	if !ok {
+		return nil // cancelled: zero side effects
+	}
+	return client.Inject(*pane, "/"+sel.Name, tmux.InjectOptions{})
 }
 
 func runInject(args []string) error {
