@@ -27,6 +27,12 @@ Sources of truth (all in `.agent-history/`, git-ignored, disk-only):
 - **Aesthetic:** 8-bit/Game Boy vibe. Truecolor half-block ANSI sprites
   (`▀` fg=top px, bg=bottom px), assets shipped via `go:embed`. Sixel, Kitty
   graphics, octants, and Nerd Font icons ruled out (see UI-RESEARCH.md).
+- **Sprites are mascot/flourish only, NEVER button icons** (decided
+  2026-07-04 from live prototype renders): pixel art only reads at authored
+  resolution — every downsample rags it — and native 24×24 cards fit only 3
+  buttons per popup. Deck tiles are text + box-drawing chrome (mock D /
+  mockups/01); charm budget = palette, borders, clawd mascot, animation.
+  Prior-art synthesis in .agent-history/mockups/REFERENCES.md.
 - **Icon source:** pixelarticons (MIT; `opensrc path pixelarticons`) via our
   dependency-free even-odd rasterizer; custom sprites are hand-authored layered
   text grids (chars = named palette roles). Clawd mascot source:
@@ -74,7 +80,7 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
 3. **M2 palette: DONE (2026-07-04, merged to main).** `pick` subcommand:
    fuzzy-filtered list (prefix>substring>subsequence on name; literal
    description fallback), vim keys + mouse click/wheel, **hint-aware Enter**
-   (required-arg `<...>` hint → insert `/cmd ` with NoEnter;
+   (required-arg `<...>` hint → insert `/cmd` with NoEnter;
    `catalog.Command.RequiresArgument`), Tab = insert-only, Esc side-effect
    free, fail-with-words errors (tmux status line after popup close).
    Recipes: `popup`, `bind-dev` (prefix+C-g), `qa-rig` (automated popup rig,
