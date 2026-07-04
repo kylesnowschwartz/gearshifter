@@ -60,6 +60,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+	case tea.MouseClickMsg:
+		// y=0 is the prompt line; list rows follow. Coordinates arrive
+		// popup-local and border-adjusted (S1/P0), so no offset math.
+		if msg.Button == tea.MouseLeft {
+			if row := m.offset + msg.Y - 1; msg.Y >= 1 && row < len(m.visible) {
+				c := m.commands[m.visible[row]]
+				m.selected = &c
+				return m, tea.Quit
+			}
+		}
+	case tea.MouseWheelMsg:
+		switch msg.Button {
+		case tea.MouseWheelDown:
+			m.cursor++
+		case tea.MouseWheelUp:
+			m.cursor--
+		}
+		m.clampCursor()
 	}
 	return m, nil
 }
@@ -134,6 +152,7 @@ func (m Model) View() tea.View {
 	fmt.Fprintf(&b, "%d/%d · enter run · esc cancel", len(m.visible), len(m.commands))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
