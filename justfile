@@ -1,21 +1,18 @@
-# gearshifter dev tasks — `just` lists recipes
-
+# List all available gearshifter dev recipes
 default:
     @just --list
 
-# Quality floor: format check, vet, tests. Run before every commit.
+# Pre-commit quality floor — gofmt check, go vet, and all Go tests; run after every substantive change
 check:
     @test -z "$(gofmt -l .)" || { echo "gofmt needed:"; gofmt -l .; exit 1; }
     go vet ./...
     go test ./...
 
-# Build the CLI into git-ignored bin/
+# Compile the gearshifter CLI into git-ignored bin/gearshifter
 build:
     go build -o bin/gearshifter ./cmd/gearshifter
 
-# End-to-end smoke against a disposable tmux session: list the catalog,
-# inject into a live pane, assert the command ran. Catches real-tmux quirks
-# that unit tests with a fake runner can't.
+# End-to-end smoke in a disposable tmux session — lists the catalog, injects into a live pane, asserts execution; catches real-tmux quirks fakes cannot
 qa-tmux: build
     #!/usr/bin/env bash
     set -euo pipefail
@@ -33,8 +30,7 @@ qa-tmux: build
         || { echo "qa-tmux: FAIL — injected command did not run"; exit 1; }
     echo "qa-tmux: PASS ($count commands listed, injection executed)"
 
-# Regenerate the vendored builtins table from the official commands docs
-# (decision D1 — run on each gearshifter release)
+# Regenerate the vendored builtins table from the official Claude Code commands docs; run on release or when Claude Code ships a new version
 builtins:
     curl -sL https://code.claude.com/docs/en/commands.md -o /tmp/gearshifter-commands.md
     go run ./tools/genbuiltins -in /tmp/gearshifter-commands.md -out internal/catalog/builtins.tsv
