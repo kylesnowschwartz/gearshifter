@@ -18,18 +18,28 @@ import (
 
 var version = "dev" // set via -ldflags at release time
 
+// Inbuilt layout names for the pick UI. telescope is the original
+// fullscreen searchable palette (M2). The deck grid joins in M3, takes
+// over as the default, and custom layout.toml paths resolve here too;
+// telescope stays available as a user toggle.
+const (
+	layoutTelescope = "telescope"
+	defaultLayout   = layoutTelescope
+)
+
 const usage = `gearshifter — a tmux control deck for Claude Code slash commands
 
 Usage:
-  gearshifter pick --pane PANE [--cwd DIR] [--sources ...]
+  gearshifter pick --pane PANE [--cwd DIR] [--sources ...] [--layout NAME]
   gearshifter list [--cwd DIR] [--sources user,project,builtin,plugin]
   gearshifter inject --pane PANE [--no-enter] [--no-clear] TEXT
   gearshifter version
 
 Subcommands:
-  pick     Open the interactive command palette (run it inside
-           tmux display-popup); selecting a command injects it into
-           the target pane and presses Enter.
+  pick     Open the interactive UI (run it inside tmux display-popup);
+           selecting a command injects it into the target pane and
+           presses Enter. --layout picks the UI: telescope (fullscreen
+           searchable palette, the default); the deck grid joins in M3.
   list     Print the available slash commands as TSV: name, source,
            argument hint, description. Default sources are
            user,project,builtin; add plugin explicitly to include
@@ -115,8 +125,12 @@ func runPick(args []string) error {
 	pane := fs.String("pane", "", "target tmux pane id (e.g. %12); required")
 	cwd := fs.String("cwd", "", "directory for project-scoped commands; pass the target pane's cwd")
 	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
+	layout := fs.String("layout", defaultLayout, "UI layout to open (inbuilt: telescope)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *layout != layoutTelescope {
+		return fmt.Errorf("pick: unknown layout %q (inbuilt: %s)", *layout, layoutTelescope)
 	}
 	if os.Getenv("TMUX") == "" {
 		return fmt.Errorf("pick: must run inside tmux (use `just popup` or a keybinding)")

@@ -92,6 +92,10 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
 4. **M3 deck (next):** grid, Button/Gear/Launcher tiles, layout.toml,
    Layer/Compositor hit-testing; palette embeds behind the Launcher tile
    (`internal/palette.Model` is self-contained). Gear-state spike (V7) here.
+   `pick --layout` flag already exists (inbuilt `telescope` = the M2
+   fullscreen palette, current default): deck registers there, becomes the
+   default, telescope stays a user toggle — never delete it. Custom
+   layout.toml paths resolve through the same flag.
 5. **M4 polish** (TPM bootstrap, goreleaser, CI, bump/release recipes) →
    **M5 aesthetic** (themes, sprites, animation; glamour "dark" hardcoding
    revisit if preview ever returns).
