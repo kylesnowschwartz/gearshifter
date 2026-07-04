@@ -118,6 +118,9 @@ func runPick(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if os.Getenv("TMUX") == "" {
+		return fmt.Errorf("pick: must run inside tmux (use `just popup` or a keybinding)")
+	}
 	if *pane == "" {
 		return fmt.Errorf("pick: --pane is required")
 	}
@@ -150,7 +153,17 @@ func runPick(args []string) error {
 		text += " "
 		opts.NoEnter = true
 	}
-	return client.Inject(*pane, text, opts)
+	// The target can die while the palette is open. Popup stderr is
+	// invisible, so surface failures in the tmux status line instead.
+	if !client.PaneExists(*pane) {
+		_ = client.DisplayMessage(fmt.Sprintf("gearshifter: target pane %s is gone; %s not injected", *pane, text))
+		return fmt.Errorf("pick: target pane %s is gone; %s not injected", *pane, strings.TrimSpace(text))
+	}
+	if err := client.Inject(*pane, text, opts); err != nil {
+		_ = client.DisplayMessage("gearshifter: inject failed: " + err.Error())
+		return fmt.Errorf("pick: %w", err)
+	}
+	return nil
 }
 
 func runInject(args []string) error {

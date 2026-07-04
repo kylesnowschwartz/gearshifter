@@ -104,3 +104,11 @@ func (c *Client) PaneExists(pane string) bool {
 	_, err := c.run.Run("", "list-panes", "-t", pane)
 	return err == nil
 }
+
+// DisplayMessage flashes text in the tmux status line — the only error
+// surface a user can see after a display-popup has closed (popup stderr is
+// discarded).
+func (c *Client) DisplayMessage(text string) error {
+	_, err := c.run.Run("", "display-message", text)
+	return err
+}
