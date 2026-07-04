@@ -4,39 +4,51 @@ import (
 	"bufio"
 	"io"
 	"strings"
+
+	"github.com/goccy/go-yaml"
 )
 
-// parseFrontmatter reads the leading YAML frontmatter block (--- ... ---)
-// and returns its top-level scalar fields, lowercased keys. It is a minimal
-// parser on purpose: skill/command frontmatter in the wild is flat
-// `key: value` scalars, and a YAML dependency isn't warranted (CQS-006).
-// Nested structures and list items are skipped.
-func parseFrontmatter(r io.Reader) map[string]string {
-	fields := map[string]string{}
+// frontmatter holds the fields Gearshifter reads from a skill/command
+// definition's YAML header. Everything else (metadata blocks, allowed-tools,
+// hooks config) is intentionally ignored.
+type frontmatter struct {
+	Name         string `yaml:"name"`
+	Description  string `yaml:"description"`
+	ArgumentHint string `yaml:"argument-hint"`
+}
+
+// parseFrontmatter reads the leading YAML block (--- ... ---) and unmarshals
+// it with a real YAML parser — skills in the wild use folded (>-) and literal
+// (|) block scalars for descriptions, which line-based extraction corrupts.
+// Malformed YAML degrades to empty fields; it never hides a command from the
+// catalog.
+func parseFrontmatter(r io.Reader) frontmatter {
+	var fm frontmatter
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	if !sc.Scan() || strings.TrimSpace(sc.Text()) != "---" {
-		return fields
+		return fm
 	}
+	var block strings.Builder
 	for sc.Scan() {
-		line := sc.Text()
-		if strings.TrimSpace(line) == "---" {
+		if strings.TrimSpace(sc.Text()) == "---" {
 			break
 		}
-		if line == "" || strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") || strings.HasPrefix(strings.TrimSpace(line), "-") {
-			continue // nested value or list item: not ours to parse
-		}
-		key, value, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
-		key = strings.ToLower(strings.TrimSpace(key))
-		value = strings.TrimSpace(value)
-		value = strings.Trim(value, `"'`)
-		if key != "" && value != "" {
-			fields[key] = value
-		}
+		block.WriteString(sc.Text())
+		block.WriteByte('\n')
 	}
-	return fields
+	if err := yaml.Unmarshal([]byte(block.String()), &fm); err != nil {
+		return frontmatter{}
+	}
+	// Catalog output is line-oriented TSV: collapse any newlines/tabs a
+	// block scalar carried into single spaces.
+	fm.Name = collapseWhitespace(fm.Name)
+	fm.Description = collapseWhitespace(fm.Description)
+	fm.ArgumentHint = collapseWhitespace(fm.ArgumentHint)
+	return fm
+}
+
+func collapseWhitespace(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }

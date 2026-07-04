@@ -18,13 +18,15 @@ var version = "dev" // set via -ldflags at release time
 const usage = `gearshifter — a tmux control deck for Claude Code slash commands
 
 Usage:
-  gearshifter list [--cwd DIR] [--sources user,project,builtin]
+  gearshifter list [--cwd DIR] [--sources user,project,builtin,plugin]
   gearshifter inject --pane PANE [--no-enter] [--no-clear] TEXT
   gearshifter version
 
 Subcommands:
   list     Print the available slash commands as TSV: name, source,
-           argument hint, description.
+           argument hint, description. Default sources are
+           user,project,builtin; add plugin explicitly to include
+           installed-plugin commands (namespaced plugin:name).
   inject   Type TEXT into the target Claude Code pane and press Enter.
            Uses bracketed paste so the text lands literally.
   version  Print the gearshifter version.
@@ -58,7 +60,7 @@ func main() {
 func runList(args []string) error {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	cwd := fs.String("cwd", "", "directory for project-scoped commands; defaults to the current directory (pass the target pane's cwd when invoking from a popup)")
-	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin")
+	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

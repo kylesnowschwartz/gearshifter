@@ -1,10 +1,24 @@
 package tmux
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+// TestMain sandboxes HOME — same invariant as the catalog package: tests
+// must never be able to touch the user's real ~/.claude.
+func TestMain(m *testing.M) {
+	sandbox, err := os.MkdirTemp("", "gearshifter-test-home-")
+	if err != nil {
+		panic(err)
+	}
+	os.Setenv("HOME", sandbox)
+	code := m.Run()
+	os.RemoveAll(sandbox)
+	os.Exit(code)
+}
 
 type fakeRunner struct {
 	calls  []string // "stdin>args joined" per call

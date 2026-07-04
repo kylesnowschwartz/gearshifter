@@ -46,16 +46,21 @@ type Command struct {
 
 // Options configures Build.
 type Options struct {
-	Home          string // user home dir; sources 2-3 live under Home/.claude
+	// Home is the user home directory. The library never resolves it
+	// itself (no os.UserHomeDir here) — callers inject it, which is what
+	// keeps tests fully sandboxed away from the real ~/.claude.
+	Home          string
 	ProjectDir    string // target pane's cwd; project source skipped if empty
 	ClaudeVersion string // filters builtins; empty includes all with a caveat
 	Sources       map[string]bool
 }
 
-// WantSource reports whether a source is enabled. A nil/empty set means all.
+// WantSource reports whether a source is enabled. A nil/empty set means the
+// default set: user, project, builtin — plugins are opt-in (they can flood
+// the menu; include with an explicit Sources set containing "plugin").
 func (o Options) WantSource(name string) bool {
 	if len(o.Sources) == 0 {
-		return true
+		return name != "plugin"
 	}
 	return o.Sources[name]
 }
@@ -84,6 +89,9 @@ func Build(opts Options) ([]Command, error) {
 	if opts.WantSource("project") && opts.ProjectDir != "" {
 		add(scanSkills(projectSkillsDir(opts.ProjectDir), SourceProject), SourceProject)
 		add(scanCommands(projectCommandsDir(opts.ProjectDir), SourceProject), SourceProject)
+	}
+	if opts.WantSource("plugin") && opts.Home != "" {
+		add(scanPlugins(opts.Home, opts.ProjectDir), SourcePlugin)
 	}
 	if opts.WantSource("builtin") {
 		add(Builtins(opts.ClaudeVersion), SourceBuiltin)
