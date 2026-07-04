@@ -36,12 +36,12 @@ func (s Source) String() string {
 
 // Command is one available slash command. Name has no leading slash.
 type Command struct {
-	Name         string `json:"name"`
-	ArgumentHint string `json:"argument_hint,omitempty"`
-	Description  string `json:"description,omitempty"`
-	Source       string `json:"source"`
-	Path         string `json:"path,omitempty"`        // definition file; empty for builtins
-	MinVersion   string `json:"min_version,omitempty"` // builtins only
+	Name         string
+	ArgumentHint string
+	Description  string
+	Source       string
+	Path         string // definition file; empty for builtins
+	MinVersion   string // builtins only
 }
 
 // Options configures Build.

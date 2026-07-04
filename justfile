@@ -10,7 +10,22 @@ check:
 
 # Compile the gearshifter CLI into git-ignored bin/gearshifter
 build:
-    go build -o bin/gearshifter ./cmd/gearshifter
+    @go build -o bin/gearshifter ./cmd/gearshifter
+
+# {{cwd}}: directory for project-scoped commands (defaults to where just was invoked)
+# Browse the command catalog, one aligned row per command with the description truncated to fit the terminal
+ls cwd=invocation_directory(): build
+    @bin/gearshifter list --cwd "{{cwd}}" | awk -F'\t' -v w="$(tput cols)" 'BEGIN{d=w-58; if(d<20)d=20} {printf "%-28s %-8s %-16.16s %.*s\n", $1, $2, $3, d, $4}'
+
+# Open the fzf command palette in a tmux popup; selecting a command injects it into the pane the popup was launched from (pre-M2 stand-in for the real TUI)
+popup: build
+    tmux display-popup -E -w 70% -h 60% "cd {{justfile_directory()}} && bin/gearshifter list --cwd '#{pane_current_path}' | fzf --delimiter '\t' --with-nth 1 --preview 'echo {2}: {4}' --preview-window down,4,wrap | cut -f1 | sed 's|^|/|' | xargs -r -I CMD bin/gearshifter inject --pane '#{pane_id}' CMD"
+
+# {{pane}}: target tmux pane id; find it by running `tmux display -p '#{{pane_id}}'` in that pane
+# {{text}}: text to inject (defaults to /context)
+# Inject a slash command into a live Claude Code pane and press Enter — the manual QA "money test"
+inject pane text="/context": build
+    bin/gearshifter inject --pane "{{pane}}" "{{text}}"
 
 # End-to-end smoke in a disposable tmux session — lists the catalog, injects into a live pane, asserts execution; catches real-tmux quirks fakes cannot
 qa-tmux: build

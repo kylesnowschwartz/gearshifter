@@ -3,7 +3,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -19,13 +18,13 @@ var version = "dev" // set via -ldflags at release time
 const usage = `gearshifter — a tmux control deck for Claude Code slash commands
 
 Usage:
-  gearshifter list [--cwd DIR] [--sources user,project,builtin] [--json]
+  gearshifter list [--cwd DIR] [--sources user,project,builtin]
   gearshifter inject --pane PANE [--no-enter] [--no-clear] TEXT
   gearshifter version
 
 Subcommands:
-  list     Print the available slash commands as TSV (name, source,
-           argument hint, description) or JSON.
+  list     Print the available slash commands as TSV: name, source,
+           argument hint, description.
   inject   Type TEXT into the target Claude Code pane and press Enter.
            Uses bracketed paste so the text lands literally.
   version  Print the gearshifter version.
@@ -58,11 +57,13 @@ func main() {
 
 func runList(args []string) error {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
-	cwd := fs.String("cwd", "", "directory for project-scoped commands (target pane's cwd)")
+	cwd := fs.String("cwd", "", "directory for project-scoped commands; defaults to the current directory (pass the target pane's cwd when invoking from a popup)")
 	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin")
-	asJSON := fs.Bool("json", false, "emit JSON instead of TSV")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *cwd == "" {
+		*cwd, _ = os.Getwd()
 	}
 
 	home, err := os.UserHomeDir()
@@ -84,11 +85,6 @@ func runList(args []string) error {
 	cmds, err := catalog.Build(opts)
 	if err != nil {
 		return err
-	}
-	if *asJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(cmds)
 	}
 	for _, c := range cmds {
 		fmt.Printf("%s\t%s\t%s\t%s\n", c.Name, c.Source, c.ArgumentHint, c.Description)
