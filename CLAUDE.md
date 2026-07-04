@@ -71,9 +71,14 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    `plugin:command`); frontmatter parsed with goccy/go-yaml (folded `>-`
    descriptions were being corrupted); tests sandbox HOME via TestMain;
    genbuiltins has named parseRow + uniqueness check + tests.
-3. **M2 palette screen** (first shippable) → **M3 deck** (grid, tiles, mouse,
-   layout.toml) → **M4 polish** (TPM bootstrap, goreleaser, CI) → **M5
-   aesthetic** (themes, sprites, animation).
+3. **M2 palette screen (next, first shippable):** phase plan with per-phase
+   "Kyle will QA this by..." notes in `.agent-history/M2-PALETTE.md` —
+   P0 Bubble Tea v2 verification (v1 fallback allowed, note debt) → P1
+   `pick` subcommand + popup/bind-dev recipes → P2 glamour preview → P3
+   edge cases + automated popup rig (`just qa-rig`).
+4. **M3 deck** (grid, tiles, mouse, layout.toml) → **M4 polish** (TPM
+   bootstrap, goreleaser, CI, bump/release recipes) → **M5 aesthetic**
+   (themes, sprites, animation).
 
 Open items:
 
