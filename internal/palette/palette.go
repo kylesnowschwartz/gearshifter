@@ -81,7 +81,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseClickMsg:
 		// y=0 is the prompt line; list rows follow. Coordinates arrive
 		// popup-local and border-adjusted (S1/P0), so no offset math.
-		if msg.Button == tea.MouseLeft {
+		if msg.Button == tea.MouseLeft && msg.X < m.listWidth() {
 			if row := m.offset + msg.Y - 1; msg.Y >= 1 && row < len(m.visible) {
 				c := m.commands[m.visible[row]]
 				m.selected = &c
@@ -161,13 +161,21 @@ func (m Model) View() tea.View {
 	var b strings.Builder
 	b.WriteString(promptStyle.Render("> "+m.query) + "█\n")
 	last := min(m.offset+m.pageSize(), len(m.visible))
+	list := make([]string, 0, m.pageSize())
 	for i := m.offset; i < last; i++ {
-		b.WriteString(m.renderRow(i))
-		b.WriteByte('\n')
+		list = append(list, m.renderRow(i))
 	}
 	if len(m.visible) == 0 {
-		b.WriteString(hintStyle.Render("no commands match") + "\n")
+		list = append(list, hintStyle.Render("no commands match"))
 	}
+	body := strings.Join(list, "\n")
+	if pw := previewWidth(m.width); pw > 0 && len(m.visible) > 0 {
+		preview := previewPane.Render(
+			renderPreview(m.commands[m.visible[m.cursor]], pw-2, m.pageSize()))
+		body = lipgloss.JoinHorizontal(lipgloss.Top, body, preview)
+	}
+	b.WriteString(body)
+	b.WriteByte('\n')
 	fmt.Fprintf(&b, "%d/%d · enter run · tab insert · esc cancel", len(m.visible), len(m.commands))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
@@ -175,8 +183,14 @@ func (m Model) View() tea.View {
 	return v
 }
 
+// listWidth is the column budget for list rows: the full popup minus the
+// preview pane (when shown).
+func (m Model) listWidth() int {
+	return m.width - previewWidth(m.width)
+}
+
 // renderRow lays out one visible row: /name + argument hint left, source
-// badge right-aligned, truncated to the popup width.
+// badge right-aligned, truncated to the list width.
 func (m Model) renderRow(i int) string {
 	c := m.commands[m.visible[i]]
 	badge := "[" + c.Source + "]"
@@ -184,10 +198,11 @@ func (m Model) renderRow(i int) string {
 	if c.ArgumentHint != "" {
 		left += " " + hintStyle.Render(c.ArgumentHint)
 	}
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(badge) - 1
+	w := m.listWidth()
+	gap := w - lipgloss.Width(left) - lipgloss.Width(badge) - 1
 	if gap < 1 {
-		left = lipgloss.NewStyle().MaxWidth(max(m.width-lipgloss.Width(badge)-2, 8)).Render(left)
-		gap = max(m.width-lipgloss.Width(left)-lipgloss.Width(badge)-1, 1)
+		left = lipgloss.NewStyle().MaxWidth(max(w-lipgloss.Width(badge)-2, 8)).Render(left)
+		gap = max(w-lipgloss.Width(left)-lipgloss.Width(badge)-1, 1)
 	}
 	row := left + strings.Repeat(" ", gap) + badgeStyle.Render(badge)
 	if i == m.cursor {
