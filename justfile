@@ -17,9 +17,10 @@ build:
 ls cwd=invocation_directory(): build
     @bin/gearshifter list --cwd "{{cwd}}" | awk -F'\t' -v w="$(tput cols)" 'BEGIN{d=w-58; if(d<20)d=20} {printf "%-28s %-8s %-16.16s %.*s\n", $1, $2, $3, d, $4}'
 
+# NOTE: display-popup does NOT format-expand its shell command (verified tmux 3.6a) — resolve pane/cwd BEFORE opening the popup
 # Open the gearshifter palette in a tmux popup; selecting a command injects it into the pane the popup was launched from
 popup: build
-    tmux display-popup -E -w 70% -h 60% "{{justfile_directory()}}/bin/gearshifter pick --pane '#{pane_id}' --cwd '#{pane_current_path}'"
+    tmux display-popup -E -w 70% -h 60% "{{justfile_directory()}}/bin/gearshifter pick --pane '$TMUX_PANE' --cwd '{{invocation_directory()}}'"
 
 # {{pane}}: target tmux pane id; find it by running `tmux display -p '#{{pane_id}}'` in that pane
 # {{text}}: text to inject (defaults to /context)
