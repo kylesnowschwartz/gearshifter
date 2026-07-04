@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/deck"
 )
 
 func testCommands() []catalog.Command {
@@ -92,6 +93,47 @@ func TestEscOnDeckQuitsWithoutSelection(t *testing.T) {
 	m := press(newTestModel(), "esc")
 	if _, ok := m.Selection(); ok {
 		t.Error("esc on deck must not select")
+	}
+}
+
+func TestClickFiresButton(t *testing.T) {
+	m := newTestModel()
+	// REVIEW sits at grid col 5 span 4, body row 0 — compute the same
+	// geometry the app does and click inside it.
+	g := deck.New(82 - 2)
+	x, _ := g.Cell(deck.RailSpan, 4)
+	updated, _ := m.Update(tea.MouseClickMsg{X: 1 + x + 2, Y: 3, Button: tea.MouseLeft})
+	m = updated.(Model)
+	sel, ok := m.Selection()
+	if !ok || sel.Name != "review" {
+		t.Errorf("click on REVIEW selected %v %v, want review", sel.Name, ok)
+	}
+}
+
+func TestClickLauncherOpensPalette(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.MouseClickMsg{X: 3, Y: 4, Button: tea.MouseLeft})
+	m = updated.(Model)
+	if m.screen != screenPalette {
+		t.Error("click on launcher must open the palette")
+	}
+}
+
+func TestClickDeadSpaceIgnored(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.MouseClickMsg{X: 0, Y: 0, Button: tea.MouseLeft})
+	m = updated.(Model)
+	if _, ok := m.Selection(); ok || m.screen != screenDeck {
+		t.Error("click outside tiles must be a no-op")
+	}
+}
+
+func TestWheelMovesFocus(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m = updated.(Model)
+	if m.focus != 1 {
+		t.Errorf("wheel down: focus = %d, want 1", m.focus)
 	}
 }
 

@@ -5,6 +5,7 @@
 package app
 
 import (
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -121,6 +122,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		if msg.Button != tea.MouseLeft {
+			return m, nil
+		}
+		// Named-layer hit-testing (M2 P0 decision): the compositor knows
+		// every tile's bounds; a hit both focuses and fires — click = do.
+		if i, ok := hitTile(m.compositor().Hit(msg.X, msg.Y)); ok && i < len(m.order) {
+			m.focus = i
+			return m.activate(m.order[i].tile.Activate())
+		}
+		return m, nil
+	case tea.MouseWheelMsg:
+		switch msg.Button {
+		case tea.MouseWheelDown:
+			m.focus = (m.focus + 1) % len(m.order)
+		case tea.MouseWheelUp:
+			m.focus = (m.focus - 1 + len(m.order)) % len(m.order)
+		}
+		return m, nil
+	}
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
@@ -200,37 +222,71 @@ func (m Model) View() tea.View {
 	return view
 }
 
-func (m Model) viewDeck() string {
-	grid := deck.New(m.width - 2) // margin: 1 cell each side (Scale[0])
-	margin := strings.Repeat(" ", 1)
+// Layout constants, all from the Fibonacci scale (deck.Scale): 1-cell
+// margin and gutters, tiles start under a 1-line header + 1-line gap.
+const (
+	marginX = 1
+	bodyY   = 2
+	rowGap  = 1
+)
 
-	// The wordmark is the single authored grid break (Samara): pinned to
-	// line 1, rendered as a reverse block, obeying no column boundary.
-	header := margin + wordmark.Render(" GEARSHIFTER ")
+// compositor lays every tile into a named layer over a base layer holding
+// the header/footer. The same compositor renders the view AND answers
+// mouse hit-tests, so clicks can never disagree with pixels.
+func (m Model) compositor() *lipgloss.Compositor {
+	grid := deck.New(m.width - 2*marginX)
 
-	_, railW := grid.Cell(0, deck.RailSpan)
-	rail := m.rail[0].tile.View(m.order[m.focus] == &m.rail[0], railW)
-
-	// Button field: two per row, geometry from the grid columns. Row
-	// spacers are relative to the rail's right edge so absolute grid x
-	// positions survive the horizontal join.
-	var rows []string
-	for i := 0; i < len(m.main); i += 2 {
-		row := make([]string, 0, 4)
-		rowX := railW
-		for j := i; j < min(i+2, len(m.main)); j++ {
-			p := m.main[j]
-			x, w := grid.Cell(p.col, p.tile.Span())
-			row = append(row, strings.Repeat(" ", x-rowX), p.tile.View(m.order[m.focus] == &m.main[j], w))
-			rowX = x + w
+	tileRows := 0
+	layers := make([]*lipgloss.Layer, 0, len(m.order)+1)
+	for i, p := range m.order {
+		x, w := grid.Cell(p.col, p.tile.Span())
+		y := bodyY
+		if row := m.mainRow(p); row >= 0 {
+			y += row * (p.tile.Rows() + rowGap)
 		}
-		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, row...))
+		layers = append(layers, lipgloss.NewLayer(p.tile.View(i == m.focus, w)).
+			ID("tile:"+strconv.Itoa(i)).X(marginX+x).Y(y).Z(1))
+		if bottom := y + p.tile.Rows(); bottom > tileRows {
+			tileRows = bottom
+		}
 	}
-	mainBlock := strings.Join(rows, "\n\n") // 1-row gutter between button rows (Scale[0])
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, margin, rail, mainBlock)
+	// Base layer: the wordmark — the single authored grid break (Samara):
+	// pinned to line 1 as a reverse block, obeying no column boundary —
+	// plus the footer hint line.
+	margin := strings.Repeat(" ", marginX)
+	base := make([]string, 0, tileRows+2)
+	base = append(base, margin+wordmark.Render(" GEARSHIFTER "))
+	for len(base) < tileRows+1 {
+		base = append(base, "")
+	}
+	base = append(base, margin+faint.Render("h/l move · Enter fire · / all commands · Esc close"))
+	baseLayer := lipgloss.NewLayer(strings.Join(base, "\n")).X(0).Y(0).Z(0)
 
-	footer := margin + faint.Render("h/l move · Enter fire · / all commands · Esc close")
+	return lipgloss.NewCompositor(append([]*lipgloss.Layer{baseLayer}, layers...)...)
+}
 
-	return strings.Join([]string{header, "", body, "", footer}, "\n")
+// mainRow returns the button-field row of a placement, or -1 for rail
+// tiles (which start at bodyY and own their full height).
+func (m Model) mainRow(p *placement) int {
+	for i := range m.main {
+		if &m.main[i] == p {
+			return i / 2
+		}
+	}
+	return -1
+}
+
+// hitTile decodes a compositor hit back to an order index.
+func hitTile(hit lipgloss.LayerHit) (int, bool) {
+	id, ok := strings.CutPrefix(hit.ID(), "tile:")
+	if !ok {
+		return 0, false
+	}
+	i, err := strconv.Atoi(id)
+	return i, err == nil
+}
+
+func (m Model) viewDeck() string {
+	return m.compositor().Render()
 }
