@@ -66,6 +66,11 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    Gotchas learned: skill dirs are often symlinks (open SKILL.md, don't trust
    DirEntry.IsDir); `tmux display-message` exits 0 for unknown targets (use
    `list-panes` for existence checks).
+   Post-review additions (revdiff, 591eb0d): plugin source (opt-in via
+   `--sources plugin`; enabled∩installed with stale-record checks, names
+   `plugin:command`); frontmatter parsed with goccy/go-yaml (folded `>-`
+   descriptions were being corrupted); tests sandbox HOME via TestMain;
+   genbuiltins has named parseRow + uniqueness check + tests.
 3. **M2 palette screen** (first shippable) → **M3 deck** (grid, tiles, mouse,
    layout.toml) → **M4 polish** (TPM bootstrap, goreleaser, CI) → **M5
    aesthetic** (themes, sprites, animation).
