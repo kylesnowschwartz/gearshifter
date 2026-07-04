@@ -45,10 +45,6 @@ type Model struct {
 	height     int
 	selected   *catalog.Command
 	insertOnly bool // Tab: insert without pressing Enter
-
-	previewLines  []string // rendered preview for the highlighted command
-	previewKey    string   // cache key (name+width) to skip re-rendering
-	previewScroll int
 }
 
 // New returns a palette over the given commands, expected pre-sorted by
@@ -85,7 +81,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseClickMsg:
 		// y=0 is the prompt line; list rows follow. Coordinates arrive
 		// popup-local and border-adjusted (S1/P0), so no offset math.
-		if msg.Button == tea.MouseLeft && msg.X < m.listWidth() {
+		if msg.Button == tea.MouseLeft {
 			if row := m.offset + msg.Y - 1; msg.Y >= 1 && row < len(m.visible) {
 				c := m.commands[m.visible[row]]
 				m.selected = &c
@@ -93,16 +89,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case tea.MouseWheelMsg:
-		if msg.X >= m.listWidth() {
-			// wheel over the preview pane scrolls the preview
-			switch msg.Button {
-			case tea.MouseWheelDown:
-				m.scrollPreview(1)
-			case tea.MouseWheelUp:
-				m.scrollPreview(-1)
-			}
-			return m, nil
-		}
 		switch msg.Button {
 		case tea.MouseWheelDown:
 			m.cursor++
@@ -111,7 +97,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.clampCursor()
 	}
-	m.refreshPreview()
 	return m, nil
 }
 
@@ -138,10 +123,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.cursor += m.pageSize() / 2
 	case "ctrl+u":
 		m.cursor -= m.pageSize() / 2
-	case "ctrl+j":
-		m.scrollPreview(1)
-	case "ctrl+k":
-		m.scrollPreview(-1)
 	case "backspace":
 		if m.query != "" {
 			m.setQuery(m.query[:len(m.query)-1])
@@ -166,33 +147,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.clampCursor()
-	m.refreshPreview()
 	return m, nil
-}
-
-// refreshPreview re-renders the preview for the highlighted command. Cached
-// by name+width so cursor-neutral events (filter keystrokes landing on the
-// same top match, wheel on the preview) skip the glamour render.
-func (m *Model) refreshPreview() {
-	pw := previewWidth(m.width)
-	if pw <= 0 || len(m.visible) == 0 {
-		m.previewLines, m.previewKey, m.previewScroll = nil, "", 0
-		return
-	}
-	c := m.commands[m.visible[m.cursor]]
-	key := fmt.Sprintf("%s|%d", c.Name, pw)
-	if key == m.previewKey {
-		return
-	}
-	m.previewKey = key
-	m.previewScroll = 0
-	m.previewLines = renderPreview(c, pw-2)
-}
-
-// scrollPreview moves the preview window, clamped to its content.
-func (m *Model) scrollPreview(delta int) {
-	maxScroll := max(0, len(m.previewLines)-m.pageSize())
-	m.previewScroll = max(0, min(m.previewScroll+delta, maxScroll))
 }
 
 // setQuery re-runs the filter and resets the viewport to the best match.
@@ -206,22 +161,13 @@ func (m Model) View() tea.View {
 	var b strings.Builder
 	b.WriteString(promptStyle.Render("> "+m.query) + "█\n")
 	last := min(m.offset+m.pageSize(), len(m.visible))
-	list := make([]string, 0, m.pageSize())
 	for i := m.offset; i < last; i++ {
-		list = append(list, m.renderRow(i))
+		b.WriteString(m.renderRow(i))
+		b.WriteByte('\n')
 	}
 	if len(m.visible) == 0 {
-		list = append(list, hintStyle.Render("no commands match"))
+		b.WriteString(hintStyle.Render("no commands match") + "\n")
 	}
-	body := strings.Join(list, "\n")
-	if len(m.previewLines) > 0 {
-		from := min(m.previewScroll, len(m.previewLines))
-		to := min(from+m.pageSize(), len(m.previewLines))
-		preview := previewPane.Render(strings.Join(m.previewLines[from:to], "\n"))
-		body = lipgloss.JoinHorizontal(lipgloss.Top, body, preview)
-	}
-	b.WriteString(body)
-	b.WriteByte('\n')
 	fmt.Fprintf(&b, "%d/%d · enter run · tab insert · esc cancel", len(m.visible), len(m.commands))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
@@ -229,14 +175,8 @@ func (m Model) View() tea.View {
 	return v
 }
 
-// listWidth is the column budget for list rows: the full popup minus the
-// preview pane (when shown).
-func (m Model) listWidth() int {
-	return m.width - previewWidth(m.width)
-}
-
 // renderRow lays out one visible row: /name + argument hint left, source
-// badge right-aligned, truncated to the list width.
+// badge right-aligned, truncated to the popup width.
 func (m Model) renderRow(i int) string {
 	c := m.commands[m.visible[i]]
 	badge := "[" + c.Source + "]"
@@ -244,11 +184,10 @@ func (m Model) renderRow(i int) string {
 	if c.ArgumentHint != "" {
 		left += " " + hintStyle.Render(c.ArgumentHint)
 	}
-	w := m.listWidth()
-	gap := w - lipgloss.Width(left) - lipgloss.Width(badge) - 1
+	gap := m.width - lipgloss.Width(left) - lipgloss.Width(badge) - 1
 	if gap < 1 {
-		left = lipgloss.NewStyle().MaxWidth(max(w-lipgloss.Width(badge)-2, 8)).Render(left)
-		gap = max(w-lipgloss.Width(left)-lipgloss.Width(badge)-1, 1)
+		left = lipgloss.NewStyle().MaxWidth(max(m.width-lipgloss.Width(badge)-2, 8)).Render(left)
+		gap = max(m.width-lipgloss.Width(left)-lipgloss.Width(badge)-1, 1)
 	}
 	row := left + strings.Repeat(" ", gap) + badgeStyle.Render(badge)
 	if i == m.cursor {
