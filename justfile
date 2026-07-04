@@ -22,6 +22,11 @@ ls cwd=invocation_directory(): build
 popup: build
     tmux display-popup -E -w 70% -h 60% "{{justfile_directory()}}/bin/gearshifter pick --pane '$TMUX_PANE' --cwd '{{invocation_directory()}}'"
 
+# Bind prefix+C-g to open the palette over the current pane (dev daily-driving; run once per tmux server, `tmux unbind C-g` to remove)
+bind-dev: build
+    tmux bind-key C-g run-shell "tmux display-popup -E -w 70% -h 60% '{{justfile_directory()}}/bin/gearshifter pick --pane #{pane_id} --cwd \"#{pane_current_path}\"'"
+    @echo "bound: prefix+C-g opens the palette (origin pane captured at keypress)"
+
 # {{pane}}: target tmux pane id; find it by running `tmux display -p '#{{pane_id}}'` in that pane
 # {{text}}: text to inject (defaults to /context)
 # Inject a slash command into a live Claude Code pane and press Enter — the manual QA "money test"

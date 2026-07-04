@@ -6,6 +6,7 @@ package palette
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -13,6 +14,17 @@ import (
 
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 )
+
+// debugLog, when GEARSHIFTER_DEBUG is set, writes every incoming message to
+// stderr — redirect it to a file when running inside display-popup, where
+// stderr is otherwise invisible.
+var debugEnabled = os.Getenv("GEARSHIFTER_DEBUG") != ""
+
+func debugLog(msg tea.Msg) {
+	if debugEnabled {
+		fmt.Fprintf(os.Stderr, "msg %T %+v\n", msg, msg)
+	}
+}
 
 var (
 	cursorStyle = lipgloss.NewStyle().Reverse(true).Bold(true)
@@ -24,14 +36,15 @@ var (
 // Model renders the command catalog as a filterable, scrollable list. Zero
 // value is not usable; construct with New.
 type Model struct {
-	commands []catalog.Command
-	query    string
-	visible  []int // indices into commands, ranked by filter match
-	cursor   int   // position within visible
-	offset   int   // first visible row (within visible)
-	width    int
-	height   int
-	selected *catalog.Command
+	commands   []catalog.Command
+	query      string
+	visible    []int // indices into commands, ranked by filter match
+	cursor     int   // position within visible
+	offset     int   // first visible row (within visible)
+	width      int
+	height     int
+	selected   *catalog.Command
+	insertOnly bool // Tab: insert without pressing Enter
 }
 
 // New returns a palette over the given commands, expected pre-sorted by
@@ -43,8 +56,8 @@ func New(commands []catalog.Command) Model {
 	}
 }
 
-// Selection returns the command chosen with Enter, if any. Valid after the
-// program has finished.
+// Selection returns the command chosen with Enter/Tab/click, if any. Valid
+// after the program has finished.
 func (m Model) Selection() (catalog.Command, bool) {
 	if m.selected == nil {
 		return catalog.Command{}, false
@@ -52,9 +65,14 @@ func (m Model) Selection() (catalog.Command, bool) {
 	return *m.selected, true
 }
 
+// InsertOnly reports whether the selection was made with Tab, requesting
+// insert-without-Enter regardless of the command's argument hint.
+func (m Model) InsertOnly() bool { return m.insertOnly }
+
 func (m Model) Init() tea.Cmd { return nil }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	debugLog(msg)
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -90,10 +108,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "esc", "ctrl+c":
 		return m, tea.Quit
-	case "enter":
+	case "enter", "tab":
 		if len(m.visible) > 0 {
 			c := m.commands[m.visible[m.cursor]]
 			m.selected = &c
+			m.insertOnly = key == "tab"
 		}
 		return m, tea.Quit
 	case "down", "ctrl+n":
@@ -149,7 +168,7 @@ func (m Model) View() tea.View {
 	if len(m.visible) == 0 {
 		b.WriteString(hintStyle.Render("no commands match") + "\n")
 	}
-	fmt.Fprintf(&b, "%d/%d · enter run · esc cancel", len(m.visible), len(m.commands))
+	fmt.Fprintf(&b, "%d/%d · enter run · tab insert · esc cancel", len(m.visible), len(m.commands))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion

@@ -135,16 +135,18 @@ func runPick(args []string) error {
 	if err != nil {
 		return fmt.Errorf("pick: %w", err)
 	}
-	sel, ok := final.(palette.Model).Selection()
+	model := final.(palette.Model)
+	sel, ok := model.Selection()
 	if !ok {
 		return nil // cancelled: zero side effects
 	}
 	// Hint-aware Enter policy: commands with a required argument (`<...>`
 	// hint) are inserted with a trailing space, ready for typing, instead
 	// of submitted bare (which misfires — e.g. /btw with no question).
+	// Tab requests the same insert-only treatment explicitly.
 	text := "/" + sel.Name
 	opts := tmux.InjectOptions{}
-	if sel.RequiresArgument() {
+	if sel.RequiresArgument() || model.InsertOnly() {
 		text += " "
 		opts.NoEnter = true
 	}
