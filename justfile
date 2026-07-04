@@ -51,6 +51,10 @@ qa-tmux: build
         || { echo "qa-tmux: FAIL — injected command did not run"; exit 1; }
     echo "qa-tmux: PASS ($count commands listed, injection executed)"
 
+# Automated popup QA rig — drives the real palette in a display-popup with synthetic keys and mouse clicks, asserting filter/inject/Tab/Esc behavior end-to-end
+qa-rig:
+    bash scripts/qa/popup-rig.sh
+
 # Regenerate the vendored builtins table from the official Claude Code commands docs; run on release or when Claude Code ships a new version
 builtins:
     curl -sL https://code.claude.com/docs/en/commands.md -o /tmp/gearshifter-commands.md
