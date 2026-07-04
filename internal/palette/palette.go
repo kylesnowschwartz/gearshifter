@@ -45,6 +45,10 @@ type Model struct {
 	height     int
 	selected   *catalog.Command
 	insertOnly bool // Tab: insert without pressing Enter
+
+	previewLines  []string // rendered preview for the highlighted command
+	previewKey    string   // cache key (name+width) to skip re-rendering
+	previewScroll int
 }
 
 // New returns a palette over the given commands, expected pre-sorted by
@@ -89,6 +93,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case tea.MouseWheelMsg:
+		if msg.X >= m.listWidth() {
+			// wheel over the preview pane scrolls the preview
+			switch msg.Button {
+			case tea.MouseWheelDown:
+				m.scrollPreview(1)
+			case tea.MouseWheelUp:
+				m.scrollPreview(-1)
+			}
+			return m, nil
+		}
 		switch msg.Button {
 		case tea.MouseWheelDown:
 			m.cursor++
@@ -97,6 +111,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.clampCursor()
 	}
+	m.refreshPreview()
 	return m, nil
 }
 
@@ -123,6 +138,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.cursor += m.pageSize() / 2
 	case "ctrl+u":
 		m.cursor -= m.pageSize() / 2
+	case "ctrl+j":
+		m.scrollPreview(1)
+	case "ctrl+k":
+		m.scrollPreview(-1)
 	case "backspace":
 		if m.query != "" {
 			m.setQuery(m.query[:len(m.query)-1])
@@ -147,7 +166,33 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.clampCursor()
+	m.refreshPreview()
 	return m, nil
+}
+
+// refreshPreview re-renders the preview for the highlighted command. Cached
+// by name+width so cursor-neutral events (filter keystrokes landing on the
+// same top match, wheel on the preview) skip the glamour render.
+func (m *Model) refreshPreview() {
+	pw := previewWidth(m.width)
+	if pw <= 0 || len(m.visible) == 0 {
+		m.previewLines, m.previewKey, m.previewScroll = nil, "", 0
+		return
+	}
+	c := m.commands[m.visible[m.cursor]]
+	key := fmt.Sprintf("%s|%d", c.Name, pw)
+	if key == m.previewKey {
+		return
+	}
+	m.previewKey = key
+	m.previewScroll = 0
+	m.previewLines = renderPreview(c, pw-2)
+}
+
+// scrollPreview moves the preview window, clamped to its content.
+func (m *Model) scrollPreview(delta int) {
+	maxScroll := max(0, len(m.previewLines)-m.pageSize())
+	m.previewScroll = max(0, min(m.previewScroll+delta, maxScroll))
 }
 
 // setQuery re-runs the filter and resets the viewport to the best match.
@@ -169,9 +214,10 @@ func (m Model) View() tea.View {
 		list = append(list, hintStyle.Render("no commands match"))
 	}
 	body := strings.Join(list, "\n")
-	if pw := previewWidth(m.width); pw > 0 && len(m.visible) > 0 {
-		preview := previewPane.Render(
-			renderPreview(m.commands[m.visible[m.cursor]], pw-2, m.pageSize()))
+	if len(m.previewLines) > 0 {
+		from := min(m.previewScroll, len(m.previewLines))
+		to := min(from+m.pageSize(), len(m.previewLines))
+		preview := previewPane.Render(strings.Join(m.previewLines[from:to], "\n"))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, body, preview)
 	}
 	b.WriteString(body)

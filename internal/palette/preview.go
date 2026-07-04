@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
@@ -31,9 +32,10 @@ func previewWidth(total int) int {
 	return total * 2 / 5
 }
 
-// renderPreview lays out the highlighted command's metadata in width columns
-// (content width, excluding the pane border/padding).
-func renderPreview(c catalog.Command, width, height int) string {
+// renderPreview lays out the highlighted command's metadata plus, for
+// file-backed commands, the glamour-rendered markdown body. Returns the full
+// (unwindowed) preview as wrapped lines of the given content width.
+func renderPreview(c catalog.Command, width int) []string {
 	var b strings.Builder
 	b.WriteString(previewTitle.Render("/"+c.Name) + "\n")
 	if c.ArgumentHint != "" {
@@ -47,10 +49,54 @@ func renderPreview(c catalog.Command, width, height int) string {
 	if c.Path != "" {
 		b.WriteString(previewMeta.Render(tildePath(c.Path)) + "\n")
 	}
-	if c.Description != "" {
+	if body := renderBody(c.Path, width); body != "" {
+		b.WriteString("\n" + body)
+	} else if c.Description != "" {
 		b.WriteString("\n" + c.Description)
 	}
-	return lipgloss.NewStyle().Width(width).MaxHeight(height).Render(b.String())
+	wrapped := lipgloss.NewStyle().Width(width).Render(b.String())
+	return strings.Split(strings.TrimRight(wrapped, "\n"), "\n")
+}
+
+// renderBody reads a command's defining markdown file and renders it with
+// glamour at the given width. Empty on any failure — the preview degrades to
+// the plain description rather than erroring.
+func renderBody(path string, width int) string {
+	if path == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStandardStyle("dark"),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return ""
+	}
+	out, err := r.Render(stripFrontmatter(string(raw)))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// stripFrontmatter drops a leading `---`-delimited YAML block; the metadata
+// is already shown above the body.
+func stripFrontmatter(s string) string {
+	if !strings.HasPrefix(s, "---\n") {
+		return s
+	}
+	rest := s[4:]
+	if i := strings.Index(rest, "\n---\n"); i >= 0 {
+		return rest[i+5:]
+	}
+	if i := strings.Index(rest, "\n---"); i >= 0 && strings.TrimSpace(rest[i+4:]) == "" {
+		return ""
+	}
+	return s
 }
 
 // tildePath abbreviates the user's home directory to ~ for display.
