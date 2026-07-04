@@ -54,10 +54,18 @@ reference implementations; "gearshifter" name unclaimed).
 
 Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
 
-1. **S1 spike (next, blocking):** verify `display-popup` forwards mouse events
-   to the inner Bubble Tea app on tmux 3.6a; settles Lip Gloss v2 Canvas
-   hit-testing vs bubblezone.
-2. **M1 plumbing:** `catalog` + `tmux` pkgs, `inject`/`list` subcommands, no TUI.
+1. **S1 spike: PASSED (2026-07-04).** `display-popup` forwards mouse to the
+   inner Bubble Tea app on tmux 3.6a, with coordinates already translated to
+   popup-local border-adjusted space (inner top-left = x0,y0). Method + details
+   in ARCHITECTURE.md §4. Canvas-vs-bubblezone deferred to M3 (non-blocking).
+2. **M1 plumbing: DONE (2026-07-04, branch `feat/m1-plumbing`).** `catalog`
+   (user/project/builtin sources, symlink-safe scanners, vendored 101-command
+   builtins.tsv regenerated via `tools/genbuiltins`) + `tmux` (M0 recipe behind
+   a Runner interface, sequence locked by test) + `list`/`inject`/`version`
+   subcommands. Stdlib-only, all tests green, e2e-verified against live tmux.
+   Gotchas learned: skill dirs are often symlinks (open SKILL.md, don't trust
+   DirEntry.IsDir); `tmux display-message` exits 0 for unknown targets (use
+   `list-panes` for existence checks).
 3. **M2 palette screen** (first shippable) → **M3 deck** (grid, tiles, mouse,
    layout.toml) → **M4 polish** (TPM bootstrap, goreleaser, CI) → **M5
    aesthetic** (themes, sprites, animation).
