@@ -71,14 +71,30 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    `plugin:command`); frontmatter parsed with goccy/go-yaml (folded `>-`
    descriptions were being corrupted); tests sandbox HOME via TestMain;
    genbuiltins has named parseRow + uniqueness check + tests.
-3. **M2 palette screen (next, first shippable):** phase plan with per-phase
-   "Kyle will QA this by..." notes in `.agent-history/M2-PALETTE.md` —
-   P0 Bubble Tea v2 verification (v1 fallback allowed, note debt) → P1
-   `pick` subcommand + popup/bind-dev recipes → P2 glamour preview → P3
-   edge cases + automated popup rig (`just qa-rig`).
-4. **M3 deck** (grid, tiles, mouse, layout.toml) → **M4 polish** (TPM
-   bootstrap, goreleaser, CI, bump/release recipes) → **M5 aesthetic**
-   (themes, sprites, animation).
+3. **M2 palette: DONE (2026-07-04, merged to main).** `pick` subcommand:
+   fuzzy-filtered list (prefix>substring>subsequence on name; literal
+   description fallback), vim keys + mouse click/wheel, **hint-aware Enter**
+   (required-arg `<...>` hint → insert `/cmd ` with NoEnter;
+   `catalog.Command.RequiresArgument`), Tab = insert-only, Esc side-effect
+   free, fail-with-words errors (tmux status line after popup close).
+   Recipes: `popup`, `bind-dev` (prefix+C-g), `qa-rig` (automated popup rig,
+   scripts/qa/popup-rig.sh). Stack verified: **charm.land/bubbletea/v2**
+   (Init()→Cmd, View()→tea.View struct, per-view MouseMode) + lipgloss v2;
+   hit-testing for M3 = lipgloss Layer/Compositor.Hit (bubblezone rejected).
+   **P2 preview pane built then DESCOPED** — deck thesis is find-and-fire,
+   not prose; re-justify every planned feature against it.
+   Gotchas: `display-popup` does NOT format-expand its command (resolve
+   pane/cwd first; `run-shell` in bindings does expand); NEVER launch the
+   popup from a Claude `!` command — injection races the `!`-completion
+   input flush and is silently discarded (V6, M2-PALETTE.md); nested
+   lipgloss styles reset ANSI mid-row (style highlighted rows once,
+   unstyled parts).
+4. **M3 deck (next):** grid, Button/Gear/Launcher tiles, layout.toml,
+   Layer/Compositor hit-testing; palette embeds behind the Launcher tile
+   (`internal/palette.Model` is self-contained). Gear-state spike (V7) here.
+5. **M4 polish** (TPM bootstrap, goreleaser, CI, bump/release recipes) →
+   **M5 aesthetic** (themes, sprites, animation; glamour "dark" hardcoding
+   revisit if preview ever returns).
 
 Open items:
 
