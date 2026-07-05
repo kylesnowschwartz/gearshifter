@@ -96,20 +96,28 @@ func (m Model) View() tea.View {
 
 // updateDeck dispatches deck input by kind; each handler owns one input
 // device. Keyboard policy lives here in app — it owns focus. Quit keys
-// always work; everything else is gated once, here, so a degraded canvas
-// (or an empty deck) can never focus, fire, or hit an invisible tile.
+// always work — during the press frame they ABORT (selection cleared,
+// zero side effects), so a misclick can be cancelled and a lost tick
+// can never wedge the popup; everything else is gated once, here, so a
+// degraded canvas (or an empty deck) can never focus, fire, or hit an
+// invisible tile.
 func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(pressFrameDoneMsg); ok {
 		return m, tea.Quit
 	}
-	if m.armed {
-		return m, nil // the press frame owns the screen; its tick quits
-	}
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		switch key.String() {
 		case "ctrl+c", "esc", "q":
+			if m.armed {
+				m.selected = nil
+				m.arg = ""
+				m.insertOnly = false
+			}
 			return m, tea.Quit
 		}
+	}
+	if m.armed {
+		return m, nil // the press frame owns the screen; its tick quits
 	}
 	if len(m.order) == 0 || m.canvasTooSmall() {
 		return m, nil

@@ -125,6 +125,14 @@ func (b Button) WithInsert() Button {
 // border-embedded info slot, tui-research/02 §3; promoted 2026-07-05).
 const buttonContentRows = 1
 
+// nameplateJoints is the two border caps around the plate (┤ ├);
+// nameplateMin is the smallest plate worth splicing (" /a " = 4 cells)
+// before the bottom border degrades to plain.
+const (
+	nameplateJoints = 2
+	nameplateMin    = 4
+)
+
 func (b Button) Activate() tea.Msg { return TileActivatedMsg{Command: b.Cmd, Insert: b.Insert} }
 func (b Button) Span() int         { return b.span }
 func (b Button) Rows() int         { return borderRows + buttonContentRows }
@@ -151,11 +159,17 @@ func (b Button) View(rs RenderState, width int) string {
 	}
 	side := frame.Render(chars.Left)
 	top := frame.Render(chars.TopLeft + strings.Repeat(chars.Top, max(0, inner)) + chars.TopRight)
-	bottom := frame.Render(chars.BottomLeft + strings.Repeat(chars.Bottom, max(0, inner)) + chars.BottomRight)
-	if plate := " /" + b.Cmd.Name + " "; lipgloss.Width(plate)+2 <= inner {
+	// The nameplate truncates before it disappears: a button must show
+	// which command it fires (review finding — the old sublabel always
+	// did), so only a tile too narrow for any identity drops it.
+	plate := truncate(" /"+b.Cmd.Name+" ", max(0, inner-nameplateJoints))
+	var bottom string
+	if w := lipgloss.Width(plate); w >= nameplateMin {
 		bottom = frame.Render(chars.BottomLeft+chars.MiddleRight) +
 			st.Sub.Render(plate) +
-			frame.Render(chars.MiddleLeft+strings.Repeat(chars.Bottom, inner-lipgloss.Width(plate)-2)+chars.BottomRight)
+			frame.Render(chars.MiddleLeft+strings.Repeat(chars.Bottom, inner-w-nameplateJoints)+chars.BottomRight)
+	} else {
+		bottom = frame.Render(chars.BottomLeft + strings.Repeat(chars.Bottom, max(0, inner)) + chars.BottomRight)
 	}
 	return top + "\n" + side + label + side + "\n" + bottom
 }
@@ -264,7 +278,10 @@ func (g Gear) View(rs RenderState, width int) string {
 		if i == g.current {
 			mark = theme.MarkCurrent // the session's current value (V7 fills this in)
 		}
-		line := mark + val
+		// Truncate before padding: an over-wide value from a user
+		// layout.toml would bleed past the tile and desync the
+		// compositor's hit-testing (review finding).
+		line := truncate(mark+val, max(0, inner))
 		line += strings.Repeat(" ", max(0, inner-lipgloss.Width(line)))
 		switch {
 		case rs.Armed && i == g.cursor:

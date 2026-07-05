@@ -73,9 +73,9 @@ func TestPressFrameArmsThenQuits(t *testing.T) {
 	if !m.armed {
 		t.Fatal("firing a tile must enter the press frame")
 	}
-	m = press(m, "l", "enter", "esc") // all inert inside the frame
+	m = press(m, "l", "enter") // non-quit input is inert inside the frame
 	if !m.armed || m.focus != 2 {
-		t.Error("input during the press frame must be swallowed")
+		t.Error("non-quit input during the press frame must be swallowed")
 	}
 	updated, cmd := m.Update(pressFrameDoneMsg{})
 	m = updated.(Model)
@@ -84,6 +84,24 @@ func TestPressFrameArmsThenQuits(t *testing.T) {
 	}
 	if sel, ok := m.Selection(); !ok || sel.Name != "compact" {
 		t.Errorf("selection must survive the frame, got %v %v", sel.Name, ok)
+	}
+}
+
+// Quit keys always work — during the press frame they abort: the
+// recorded selection is cleared so a misclick cancels with zero side
+// effects, and a lost tick can never wedge the popup (review finding).
+func TestPressFrameQuitKeysAbort(t *testing.T) {
+	m := press(newTestModel(), "l", "l", "enter") // fire COMPACT, armed
+	updated, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("esc during the press frame must quit")
+	}
+	if _, ok := m.Selection(); ok {
+		t.Error("aborting the press frame must clear the selection")
+	}
+	if m.Arg() != "" || m.InsertOnly() {
+		t.Error("abort must clear every selection modifier")
 	}
 }
 

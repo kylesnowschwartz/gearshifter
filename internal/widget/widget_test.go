@@ -96,6 +96,34 @@ func TestThemedTileGeometryMatchesPlain(t *testing.T) {
 	}
 }
 
+// Every rendered row must occupy exactly the tile width: over-wide
+// values bleed across grid columns and desync compositor hit-testing;
+// too-narrow nameplates truncate before they disappear (review
+// findings).
+func TestTileRowsNeverExceedWidth(t *testing.T) {
+	const width = 12
+	tiles := []Tile{
+		NewGear(testStyles, catalog.Command{Name: "model"}, "MODEL",
+			[]string{"claude-fable-5-extended", "ok"}, 3),
+		NewButton(testStyles, catalog.Command{Name: "reload-plugins"}, "RELOAD", 3),
+	}
+	for _, tile := range tiles {
+		for _, line := range strings.Split(tile.View(RenderState{}, width), "\n") {
+			if w := lipgloss.Width(line); w != width {
+				t.Errorf("%T row %q is %d cells, want %d", tile, line, w, width)
+			}
+		}
+	}
+}
+
+func TestNameplateTruncatesBeforeVanishing(t *testing.T) {
+	b := NewButton(testStyles, catalog.Command{Name: "goal"}, "GOAL", 2)
+	view := b.View(RenderState{}, 9) // inner 7: " /goal " won't fit whole
+	if !strings.Contains(view, "/g") {
+		t.Errorf("narrow button must keep a truncated nameplate:\n%s", view)
+	}
+}
+
 func TestGearViewMarksCurrent(t *testing.T) {
 	view := modelGear().WithCurrent("opus").View(RenderState{}, 20)
 	for _, line := range strings.Split(view, "\n") {
