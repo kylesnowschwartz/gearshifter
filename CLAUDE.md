@@ -97,24 +97,35 @@ P1 theme seam, P2 tile states + nameplate buttons, P4 wordmark gradient
 SHIPPED (M5-AESTHETIC.md); P3 clawd mascot skipped for now; frame-dedup
 refactor done (theme.FrameStyles + widget.tileFrame + one Styles.Armed
 role + theme.ApplySurface). Only P5 house palette remains — deferred
-until Kyle wants to decide colors.** **Strip (STRIP-EMBED.md) step 1
-SHIPPED 2026-07-05: `gearshifter strip` runs the deck as a persistent
-pane widget — app.PersistentHooks (Inject/Refresh/Seed) deliver each
-fire off-loop as a tea.Cmd, the target Claude pane is re-resolved PER
-FIRE (explicit `--pane` pin, never self, else window scan via
-`agent.Provider.HasSession`), gear state re-polls every 5s through
-layout.GearSettings with per-gear dedup. Popup pane-targeting stays
-origin-at-keypress; strip's per-fire scan is the settled exception.
-Steps 2–5 (glyph chips, gear transient menu, clawd flourish, tcm
-embedding) not started.** Distribution is parked as M6 until
-someone besides Kyle wants an install. The deck is the default UI;
-a `run-shell .../gearshifter.tmux` line in tmux.conf owns the permanent
-`prefix+C-g` binding (`just bind-dev` sources the same file for dev);
-`@gearshifter-layout/width/height` are honored at keypress time;
-telescope stays one flag away. Dev loop: `just check` after every
-substantive change; `just qa-rig` (popup rig, 20 assertions incl. deck
-click, plugin binding, and strip persistent-pane end-to-end) before
-merging UI work.
+until Kyle wants to decide colors.** **Strip (STRIP-EMBED.md) steps 1–3
+SHIPPED (step 1 2026-07-05; steps 2–3 compact chip flow 2026-07-06
+after a full pre-merge review round): `gearshifter strip [--compact]`
+runs the deck as a persistent pane widget — app.PersistentHooks
+(Inject func(app.Fire)/Refresh/Seed) deliver each fire off-loop, the
+target Claude pane re-resolved PER FIRE (explicit `--pane` pin, never
+self, else window scan via `agent.Provider.HasSession`); `--compact`
+is the chip flow (column-aligned chips, gear chips own their row and
+expand to the horizontal gated row, theme glyph table + layout.toml
+`glyph =` override — authored > table > •, glyphs must be EA-Neutral
+single-cell, no wordmark). Settled behavior: click-fires return tmux
+focus to the target (Fire.FromMouse → SelectPane), keyboard fires
+don't; esc NEVER quits a persistent strip (q/ctrl+c do); error
+notices sticky, confirmations expire in 5s; hover ring hides when the
+pointer leaves all tiles and hover-away collapses gear rows; pointer
+events bounded by RENDERED rows; model badge arbitrates by transcript
+ENTRY time, not file mtime (agent-ouija v1.1.0 LastAssistantModelAt,
+pin bumped). Live as a tcm companion pane (tcm-side spec:
+tail-claude-mux/.agent-history/COMPANION-PANE-SPEC.md; Kyle runs
+`--theme plain`). Steps 4–5 (clawd flourish, tcm embed docs) remain;
+parked perf notes in STRIP-EMBED.md.** Distribution is parked as M6
+until someone besides Kyle wants an install. The deck is the default
+UI; a `run-shell .../gearshifter.tmux` line in tmux.conf owns the
+permanent `prefix+C-g` binding (`just bind-dev` sources the same
+file for dev); `@gearshifter-layout/width/height` are honored at
+keypress time; telescope stays one flag away. Dev loop: `just check`
+after every substantive change; `just qa-rig` (popup rig, 25
+assertions incl. deck click, plugin binding, strip persistent-pane,
+and compact-strip end-to-end) before merging UI work.
 
 Done foundations (2026-07-04): M0 injection spike (recipe above); product
 spec v1; interview settled D1–D4; architecture draft; prior-art survey
