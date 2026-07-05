@@ -87,10 +87,17 @@ package importing agent-ouija.
 
 M0–M4 shipped, deck content settled from real usage data
 (DECK-CONTENT.md: default = MODEL/EFFORT gears + COMPACT/COPY/CLEAR/
-CONTEXT/RESUME/CONFIG six-pack; Kyle's `examples/kyle.toml` adds a STYLE
-gear, GOAL insert-tile, RADIO, RELOAD); **M5 aesthetic is next**;
-distribution is parked as M6 until someone besides Kyle wants an
-install. The deck is the default UI;
+CONTEXT/RESUME/CONFIG six-pack; Kyle's `examples/kyle.toml` adds a GOAL
+insert-tile, RADIO, RELOAD — its STYLE gear was REMOVED 2026-07-05:
+Claude Code dropped /output-style and /config rejects custom styles
+non-interactively; revival route = a /style command in the
+sc-output-styles plugin, DECK-CONTENT.md postscript). **M5 in flight:
+P1 theme seam, P2 tile states + nameplate buttons, P4 wordmark gradient
+SHIPPED (M5-AESTHETIC.md); P3 clawd mascot skipped for now; frame-dedup
+refactor done (theme.FrameStyles + widget.tileFrame + one Styles.Armed
+role + theme.ApplySurface). Only P5 house palette remains — deferred
+until Kyle wants to decide colors.** Distribution is parked as M6 until
+someone besides Kyle wants an install. The deck is the default UI;
 a `run-shell .../gearshifter.tmux` line in tmux.conf owns the permanent
 `prefix+C-g` binding (`just bind-dev` sources the same file for dev);
 `@gearshifter-layout/width/height` are honored at keypress time;
@@ -167,9 +174,13 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    (`@gearshifter-key` at bind time); qa-rig step 11 drives prefix+C-g
    end-to-end. `internal/config` stays unbuilt — the shell seam covers
    @options until Go needs them.
-6. **M5 aesthetic (next):** house palette (DMG vs PICO-8 — mocks favor
-   PICO-8), clawd mascot sprite, wordmark grid-break treatment,
-   themes/animation.
+6. **M5 aesthetic (in flight, M5-AESTHETIC.md rev 2):** P1 theme seam,
+   P2 tile states + nameplate buttons, P4 wordmark gradient SHIPPED;
+   P3 clawd mascot skipped for now (k9s recipe documented for later);
+   structural frame-dedup done. Remaining: **P5 house palette only** —
+   a *designed* ramp palette per the TUI-AESTHETICS.md verdict (DMG /
+   PICO-8 demoted to optional retro themes), deferred until Kyle wants
+   to decide colors.
 7. **M6 distribution (parked until an external user exists):** TPM
    bootstrap, goreleaser, CI, bump/release recipes; also parked: opt-in
    per-session effort shim (hook/statusline). The session-state package
