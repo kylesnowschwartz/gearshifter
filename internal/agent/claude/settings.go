@@ -1,8 +1,7 @@
 package claude
 
 import (
-	"path/filepath"
-
+	"github.com/kylesnowschwartz/agent-ouija/claude/claudedir"
 	"github.com/kylesnowschwartz/agent-ouija/claude/settings"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
@@ -13,12 +12,12 @@ import (
 // model, effortLevel, outputStyle) the moment they change, so the deck's
 // gears read Claude's truth instead of sniffing panes or trusting user
 // statuslines. Any failure degrades to the zero value — gears render
-// stateless, never error.
+// stateless, never error. settings.Read owns the secrets-safe decoding.
 //
-// Decoding is delegated to agent-ouija's settings package, which reads
-// ONLY these fields and never logs the raw content (the file also holds
-// sensitive values like env).
-func readSettings(home string) agent.State {
-	s := settings.Read(filepath.Join(home, ".claude", "settings.json"))
+// The path comes from root.SettingsPath() — the same derivation
+// sessionState stats for mtime arbitration, so the file read and the file
+// arbitrated can never diverge.
+func readSettings(root claudedir.Root) agent.State {
+	s := settings.Read(root.SettingsPath())
 	return agent.State{Model: s.Model, Effort: s.Effort, Style: s.Style}
 }

@@ -6,19 +6,19 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/kylesnowschwartz/agent-ouija/claude/claudedir"
 )
 
 // Tests of the moved mechanisms (process-tree walk, session matching,
 // path encoding, transcript tail scan) live in agent-ouija's registry,
 // claudedir, and transcript packages. What stays here is gearshifter
 // policy: the settings-vs-transcript mtime arbitration and the global
-// fallback.
+// fallback. Fixtures derive every path through the same claudedir.Root
+// seam production uses (via testRoot), so fixture writes and production
+// reads can never diverge.
 
 func writeTranscript(t *testing.T, home, cwd, sessionID string, lines ...string) string {
 	t.Helper()
-	dir := filepath.Join(home, ".claude", "projects", claudedir.EncodeProjectPath(cwd))
+	dir := testRoot(home).ProjectDirFor(cwd)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -35,11 +35,11 @@ func writeTranscript(t *testing.T, home, cwd, sessionID string, lines ...string)
 
 func TestStateArbitratesByMtime(t *testing.T) {
 	home := writeSettings(t, `{"model":"opus","effortLevel":"high"}`)
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	settingsPath := testRoot(home).SettingsPath()
 	cwd := "/proj"
 	transcript := writeTranscript(t, home, cwd, "s1",
 		`{"type":"assistant","message":{"model":"claude-fable-5"}}`)
-	registry := filepath.Join(home, ".claude", "sessions")
+	registry := testRoot(home).SessionsDir()
 	if err := os.MkdirAll(registry, 0o755); err != nil {
 		t.Fatal(err)
 	}

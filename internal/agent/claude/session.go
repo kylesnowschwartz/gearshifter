@@ -29,9 +29,8 @@ import (
 // The fresher file wins the model — settings.json updates the instant
 // /model runs, transcripts only on the next assistant reply. That
 // arbitration rule is gearshifter policy, not library behavior.
-func sessionState(home string, panePID int, paneCwd string) agent.State {
-	root := claudedir.Root(filepath.Join(home, ".claude"))
-	state := readSettings(home)
+func sessionState(root claudedir.Root, panePID int, paneCwd string) agent.State {
+	state := readSettings(root)
 	entry, ok := registry.ResolvePane(root.SessionsDir(), panePID, paneCwd)
 	if !ok {
 		return state
