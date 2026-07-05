@@ -54,6 +54,10 @@ click_at() { # col row (1-based screen coords)
   printf '\033[<0;%d;%dM\033[<0;%d;%dm' "$1" "$2" "$1" "$2" \
     | tmux load-buffer -b rigsgr - && tmux paste-buffer -b rigsgr -d -t "$HOST"
 }
+move_to() { # col row (1-based): bare motion, no button held (SGR 35)
+  printf '\033[<35;%d;%dM' "$1" "$2" \
+    | tmux load-buffer -b rigsgr - && tmux paste-buffer -b rigsgr -d -t "$HOST"
+}
 
 echo "1. telescope popup opens and lists the catalog"
 open_popup --layout telescope
@@ -139,7 +143,23 @@ if [ -z "$ROW" ]; then bad "gear value click (sonnet not found)"; else
   origin_screen | rg -q 'no such file.*model' && ok "gear value click" || bad "gear value click"
 fi
 
-echo "10. Esc on the deck cancels with zero side effects"
+echo "10. hover moves the focus ring (SGR 1003 forwarded into the popup)"
+# Plain theme: focus = double-border charset, visible in an uncolored
+# capture (the default theme signals focus by color alone).
+open_popup --theme plain
+SCREEN=$(host_screen)
+ROW=$(echo "$SCREEN" | grep -n 'COPY' | head -1 | cut -d: -f1 || true)
+if [ -z "$ROW" ]; then bad "hover focus (COPY not found)"; else
+  LINE=$(echo "$SCREEN" | sed -n "${ROW}p")
+  PREFIX=${LINE%%COPY*}
+  move_to $(( ${#PREFIX} + 3 )) "$ROW"
+  sleep 0.7
+  host_screen | rg -q '║.*COPY' && ok "hover focus" || bad "hover focus"
+fi
+send_host Escape
+sleep 0.5
+
+echo "11. Esc on the deck cancels with zero side effects"
 before=$(origin_screen | tail -1)
 open_deck
 send_host Escape
@@ -147,7 +167,7 @@ sleep 1
 after=$(origin_screen | tail -1)
 [ "$before" = "$after" ] && ok "deck esc no side effects" || bad "deck esc no side effects"
 
-echo "11. plugin entry point binds the key; prefix+C-g opens the deck"
+echo "12. plugin entry point binds the key; prefix+C-g opens the deck"
 # The rig's popup height default (75%) is honored via open-popup.sh, so
 # oversize it for the small rig client the same way open_deck does.
 tmux -L "$SOCK" set -g @gearshifter-height 90%

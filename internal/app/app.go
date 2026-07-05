@@ -82,7 +82,10 @@ func (m Model) View() tea.View {
 	}
 	var view tea.View
 	view.AltScreen = true
-	view.MouseMode = tea.MouseModeCellMotion // requested from P0 so tmux never scrolls
+	// AllMotion (SGR 1003) for hover focus — spiked 2026-07-05: tmux
+	// forwards bare motion into display-popup, popup-local coords, same
+	// as clicks (S1). CellMotion was P0's floor so tmux never scrolls.
+	view.MouseMode = tea.MouseModeAllMotion
 	m.styles.ApplySurface(&view)
 	if m.width == 0 {
 		return view
@@ -122,6 +125,8 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.MouseClickMsg:
 		return m.handleDeckClick(msg)
+	case tea.MouseMotionMsg:
+		return m.handleDeckMotion(msg)
 	case tea.MouseWheelMsg:
 		return m.handleDeckWheel(msg)
 	case tea.KeyPressMsg:
@@ -153,6 +158,26 @@ func (m Model) handleDeckClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m.activate(m.order[i].Tile.Activate())
+}
+
+// handleDeckMotion is hover: the focus ring follows the pointer, and
+// inside a gear the value cursor tracks the hovered row (mirroring
+// click's row targeting — hover shows exactly what a click would do).
+// Off-tile motion changes nothing, and an unchanged model renders an
+// identical frame, so the per-cell motion flood costs no repaints.
+func (m Model) handleDeckMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
+	hit := m.compositor().Hit(msg.X, msg.Y)
+	i, ok := hitTile(hit)
+	if !ok || i >= len(m.order) {
+		return m, nil
+	}
+	m.focus = i
+	if g, isGear := m.order[i].Tile.(widget.Gear); isGear {
+		if v, ok := g.ValueAt(msg.Y - hit.Bounds().Min.Y); ok {
+			m.order[i].Tile = g.WithCursor(v)
+		}
+	}
+	return m, nil
 }
 
 func (m Model) handleDeckWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
