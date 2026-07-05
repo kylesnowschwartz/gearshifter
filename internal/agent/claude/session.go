@@ -1,4 +1,4 @@
-package catalog
+package claude
 
 import (
 	"bytes"
@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/kylesnowschwartz/gearshifter/internal/agent"
 )
 
 // Session-specific gear state (M3 P3.5). Mechanisms verified against
@@ -32,13 +34,13 @@ type sessionEntry struct {
 	StartedAt string `json:"startedAt"`
 }
 
-// SessionGearState returns the gear state for the Claude session running
-// in the target pane: session-specific model when resolvable, global
+// sessionState returns the gear state for the Claude session running in
+// the target pane: session-specific model when resolvable, global
 // settings otherwise; effort is always global (not persisted per session).
 // The fresher file wins the model — settings.json updates the instant
 // /model runs, transcripts only on the next assistant reply.
-func SessionGearState(home string, panePID int, paneCwd string) GearState {
-	state := ReadGearState(home)
+func sessionState(home string, panePID int, paneCwd string) agent.State {
+	state := readSettings(home)
 	entry, ok := findSession(readSessionRegistry(home), descendantsOf(processChildren(), panePID), paneCwd)
 	if !ok {
 		return state

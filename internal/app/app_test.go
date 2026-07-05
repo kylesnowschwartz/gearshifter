@@ -6,8 +6,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/kylesnowschwartz/gearshifter/internal/agent"
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 	"github.com/kylesnowschwartz/gearshifter/internal/deck"
+	"github.com/kylesnowschwartz/gearshifter/internal/layout"
 )
 
 func testCommands() []catalog.Command {
@@ -23,7 +25,8 @@ func testCommands() []catalog.Command {
 func newTestModel() Model {
 	// haiku/low: cursors start on current (index 0), keeping key-walk
 	// expectations simple.
-	m := New(testCommands(), catalog.GearState{Model: "haiku", Effort: "low"})
+	cmds := testCommands()
+	m := New(cmds, layout.Default(cmds, agent.State{Model: "haiku", Effort: "low"}))
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 20})
 	return updated.(Model)
 }

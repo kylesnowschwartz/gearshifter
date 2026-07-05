@@ -1,4 +1,4 @@
-package catalog
+package claude
 
 import (
 	"fmt"
@@ -85,7 +85,7 @@ func TestTranscriptModel(t *testing.T) {
 	}
 }
 
-func TestSessionGearStateArbitratesByMtime(t *testing.T) {
+func TestStateArbitratesByMtime(t *testing.T) {
 	home := writeSettings(t, `{"model":"opus","effortLevel":"high"}`)
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 	cwd := "/proj"
@@ -105,7 +105,7 @@ func TestSessionGearStateArbitratesByMtime(t *testing.T) {
 	if err := os.Chtimes(settingsPath, old, old); err != nil {
 		t.Fatal(err)
 	}
-	if s := SessionGearState(home, 0, cwd); s.Model != "claude-fable-5" || s.Effort != "high" {
+	if s := New(home).State(0, cwd); s.Model != "claude-fable-5" || s.Effort != "high" {
 		t.Errorf("transcript-newer: got %+v, want session model claude-fable-5, effort high", s)
 	}
 
@@ -117,14 +117,14 @@ func TestSessionGearStateArbitratesByMtime(t *testing.T) {
 	if err := os.Chtimes(settingsPath, now, now); err != nil {
 		t.Fatal(err)
 	}
-	if s := SessionGearState(home, 0, cwd); s.Model != "opus" {
+	if s := New(home).State(0, cwd); s.Model != "opus" {
 		t.Errorf("settings-newer: got %q, want opus", s.Model)
 	}
 }
 
-func TestSessionGearStateFallsBackToGlobal(t *testing.T) {
+func TestStateFallsBackToGlobal(t *testing.T) {
 	home := writeSettings(t, `{"model":"opus","effortLevel":"low"}`)
-	if s := SessionGearState(home, 0, "/nowhere"); s.Model != "opus" || s.Effort != "low" {
+	if s := New(home).State(0, "/nowhere"); s.Model != "opus" || s.Effort != "low" {
 		t.Errorf("no session: got %+v, want global opus/low", s)
 	}
 }

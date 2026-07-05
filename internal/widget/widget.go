@@ -50,6 +50,9 @@ var (
 	focusTile  = lipgloss.NewStyle().Border(lipgloss.DoubleBorder())
 )
 
+// borderRows is the vertical chrome every tile pays: top + bottom border.
+const borderRows = 2
+
 // box renders bordered tile chrome around pre-styled content rows. Mock D
 // chrome: single border normally, double-border focus ring. lipgloss v2
 // Style.Width is the TOTAL frame width (borders included) — content rows
@@ -85,9 +88,12 @@ func NewButton(cmd catalog.Command, label string, span int) Button {
 	return Button{Cmd: cmd, Label: label, span: span}
 }
 
+// buttonContentRows: big centered label + dim /command sublabel.
+const buttonContentRows = 2
+
 func (b Button) Activate() tea.Msg { return TileActivatedMsg{Command: b.Cmd} }
 func (b Button) Span() int         { return b.span }
-func (b Button) Rows() int         { return 4 } // border 2 + label + sublabel
+func (b Button) Rows() int         { return borderRows + buttonContentRows }
 
 func (b Button) View(focused bool, width int) string {
 	inner := width - 2
@@ -122,7 +128,7 @@ func (g Gear) Activate() tea.Msg {
 }
 
 func (g Gear) Span() int { return g.span }
-func (g Gear) Rows() int { return len(g.Values) + 2 }
+func (g Gear) Rows() int { return borderRows + len(g.Values) } // one row per value
 
 // CursorNext / CursorPrev walk the gated column (j/k inside a focused
 // gear), wrapping.
@@ -212,9 +218,12 @@ func NewLauncher(count, span int) Launcher {
 	return Launcher{Count: count, span: span}
 }
 
+// launcherContentRows: the bar is a single label/count line.
+const launcherContentRows = 1
+
 func (l Launcher) Activate() tea.Msg { return ScreenRequestedMsg{} }
 func (l Launcher) Span() int         { return l.span }
-func (l Launcher) Rows() int         { return 3 }
+func (l Launcher) Rows() int         { return borderRows + launcherContentRows }
 
 func (l Launcher) View(focused bool, width int) string {
 	inner := width - 2

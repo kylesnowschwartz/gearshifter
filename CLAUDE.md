@@ -45,8 +45,12 @@ Sources of truth (all in `.agent-history/`, git-ignored, disk-only):
   highlighted; click any value directly or j/k + Enter (not a stepper, not an
   H-gate).
 - **Module dependency rules (ARCHITECTURE.md §2):** `widget` never imports
-  `tmux` (tiles emit intent Msgs; `app` injects); `catalog`/`tmux` never import
-  Bubble Tea (plain Go, powers the scriptable `list`/`inject` subcommands).
+  `tmux` (tiles emit intent Msgs; `app` records the selection, `cmd` injects);
+  `catalog`/`tmux` never import Bubble Tea (plain Go, powers the scriptable
+  `list`/`inject` subcommands); `layout` is the one bridge importing
+  widget+deck+catalog+agent (P4's layout.toml parses into its Placements);
+  session-state readers live in `agent/claude` behind `agent.Provider` —
+  catalog is commands-only.
 
 ## State / next steps
 

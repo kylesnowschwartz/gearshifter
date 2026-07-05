@@ -1,0 +1,56 @@
+package claude
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/kylesnowschwartz/gearshifter/internal/agent"
+)
+
+// TestMain sandboxes HOME — same invariant as the catalog package: tests
+// must never reach the user's real ~/.claude directory, even through an
+// accidental env-based lookup. Fixtures use t.TempDir().
+func TestMain(m *testing.M) {
+	sandbox, err := os.MkdirTemp("", "gearshifter-test-home-")
+	if err != nil {
+		panic(err)
+	}
+	os.Setenv("HOME", sandbox)
+	code := m.Run()
+	os.RemoveAll(sandbox)
+	os.Exit(code)
+}
+
+func writeSettings(t *testing.T, content string) string {
+	t.Helper()
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
+func TestReadSettings(t *testing.T) {
+	home := writeSettings(t, `{"model":"claude-fable-5[1m]","effortLevel":"high","env":{"SECRET":"x"}}`)
+	s := readSettings(home)
+	if s.Model != "claude-fable-5[1m]" || s.Effort != "high" {
+		t.Errorf("got %+v, want model claude-fable-5[1m] effort high", s)
+	}
+}
+
+func TestReadSettingsDegradesToZero(t *testing.T) {
+	if s := readSettings(t.TempDir()); s != (agent.State{}) {
+		t.Errorf("missing file: got %+v, want zero", s)
+	}
+	if s := readSettings(writeSettings(t, "{not json")); s != (agent.State{}) {
+		t.Errorf("malformed file: got %+v, want zero", s)
+	}
+	if s := readSettings(writeSettings(t, `{"outputStyle":"x"}`)); s != (agent.State{}) {
+		t.Errorf("fields absent: got %+v, want zero", s)
+	}
+}

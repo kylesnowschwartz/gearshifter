@@ -18,14 +18,15 @@ ls cwd=invocation_directory(): build
     @bin/gearshifter list --cwd "{{cwd}}" | awk -F'\t' -v w="$(tput cols)" 'BEGIN{d=w-58; if(d<20)d=20} {printf "%-28s %-8s %-16.16s %.*s\n", $1, $2, $3, d, $4}'
 
 # NOTE: display-popup does NOT format-expand its shell command (verified tmux 3.6a) — resolve pane/cwd BEFORE opening the popup
-# Open the gearshifter palette in a tmux popup; selecting a command injects it into the pane the popup was launched from
+# WARNING (V6): never launch this from a Claude `!` command — injection races the !-completion input flush and is silently discarded (M2-PALETTE.md)
+# -h 75%: the stacked gear rail needs ~20 inner rows
+# Open the gearshifter deck in a tmux popup; firing a tile injects its command into the pane the popup was launched from
 popup: build
-    tmux display-popup -E -w 70% -h 60% "{{justfile_directory()}}/bin/gearshifter pick --pane '$TMUX_PANE' --cwd '{{invocation_directory()}}'"
-
-# Open the M3 deck layout in a tmux popup (dev; deck becomes the default at M3 close)
-# -h 75%: the stacked gear rail needs ~20 inner rows; popup height is ours to set
-popup-deck: build
     tmux display-popup -E -w 70% -h 75% "{{justfile_directory()}}/bin/gearshifter pick --layout deck --pane '$TMUX_PANE' --cwd '{{invocation_directory()}}'"
+
+# Open the M2 telescope palette (fullscreen searchable list) in a tmux popup — the pre-deck UI, still the binary default until P5
+popup-telescope: build
+    tmux display-popup -E -w 70% -h 60% "{{justfile_directory()}}/bin/gearshifter pick --layout telescope --pane '$TMUX_PANE' --cwd '{{invocation_directory()}}'"
 
 # Bind prefix+C-g to open the palette over the current pane (dev daily-driving; run once per tmux server, `tmux unbind C-g` to remove)
 bind-dev: build

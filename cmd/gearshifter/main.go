@@ -11,8 +11,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/kylesnowschwartz/gearshifter/internal/agent"
+	"github.com/kylesnowschwartz/gearshifter/internal/agent/claude"
 	"github.com/kylesnowschwartz/gearshifter/internal/app"
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/layout"
 	"github.com/kylesnowschwartz/gearshifter/internal/palette"
 	"github.com/kylesnowschwartz/gearshifter/internal/tmux"
 )
@@ -120,19 +123,34 @@ func buildCatalog(cwd, sources string) ([]catalog.Command, error) {
 	return catalog.Build(opts)
 }
 
-// runPick opens the palette TUI and injects the chosen command into the
-// target pane. Meant to run inside `tmux display-popup -E`.
+// selection is what the pick UI hands back: the chosen command plus the
+// modifiers that shape its injection (a committed gear value, Tab's
+// insert-without-Enter request).
+type selection struct {
+	cmd        catalog.Command
+	arg        string
+	insertOnly bool
+}
+
+// HasArg reports whether a gear value came with the command — the
+// injection becomes "/command value".
+func (s selection) HasArg() bool { return s.arg != "" }
+
+// runPick opens the pick UI and injects the chosen command into the
+// target pane. Meant to run inside `tmux display-popup -E`. Three steps,
+// one function each: validate flags/env here, runPickUI records what the
+// user chose, injectSelection delivers it.
 func runPick(args []string) error {
 	fs := flag.NewFlagSet("pick", flag.ExitOnError)
 	pane := fs.String("pane", "", "target tmux pane id (e.g. %12); required")
 	cwd := fs.String("cwd", "", "directory for project-scoped commands; pass the target pane's cwd")
 	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
-	layout := fs.String("layout", defaultLayout, "UI layout to open (inbuilt: telescope, deck)")
+	layoutName := fs.String("layout", defaultLayout, "UI layout to open (inbuilt: telescope, deck)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *layout != layoutTelescope && *layout != layoutDeck {
-		return fmt.Errorf("pick: unknown layout %q (inbuilt: %s, %s)", *layout, layoutTelescope, layoutDeck)
+	if *layoutName != layoutTelescope && *layoutName != layoutDeck {
+		return fmt.Errorf("pick: unknown layout %q (inbuilt: %s, %s)", *layoutName, layoutTelescope, layoutDeck)
 	}
 	if os.Getenv("TMUX") == "" {
 		return fmt.Errorf("pick: must run inside tmux (use `just popup` or a keybinding)")
@@ -150,44 +168,56 @@ func runPick(args []string) error {
 		return err
 	}
 
-	var sel catalog.Command
-	var arg string
-	var ok, insertOnly bool
-	switch *layout {
-	case layoutDeck:
-		home, _ := os.UserHomeDir()
-		// Session-specific model when the pane's Claude session is
-		// resolvable; global settings otherwise (V7/P3.5, M3-DECK.md).
-		panePID, _ := client.PanePID(*pane)
-		paneCwd, _ := client.PaneCwd(*pane)
-		final, err := tea.NewProgram(app.New(cmds, catalog.SessionGearState(home, panePID, paneCwd))).Run()
-		if err != nil {
-			return fmt.Errorf("pick: %w", err)
-		}
-		model := final.(app.Model)
-		sel, ok = model.Selection()
-		arg = model.Arg()
-		insertOnly = model.InsertOnly()
-	default: // telescope
-		final, err := tea.NewProgram(palette.New(cmds)).Run()
-		if err != nil {
-			return fmt.Errorf("pick: %w", err)
-		}
-		model := final.(palette.Model)
-		sel, ok = model.Selection()
-		insertOnly = model.InsertOnly()
+	pick, ok, err := runPickUI(*layoutName, cmds, client, *pane)
+	if err != nil {
+		return err
 	}
 	if !ok {
 		return nil // cancelled: zero side effects
 	}
-	text, opts := buildInjection(sel, arg, insertOnly)
-	// The target can die while the palette is open. Popup stderr is
-	// invisible, so surface failures in the tmux status line instead.
-	if !client.PaneExists(*pane) {
-		_ = client.DisplayMessage(fmt.Sprintf("gearshifter: target pane %s is gone; %s not injected", *pane, text))
-		return fmt.Errorf("pick: target pane %s is gone; %s not injected", *pane, strings.TrimSpace(text))
+	return injectSelection(client, *pane, pick)
+}
+
+// runPickUI runs the chosen layout's Bubble Tea program and reports the
+// user's selection; ok is false when they cancelled.
+func runPickUI(layoutName string, cmds []catalog.Command, client *tmux.Client, pane string) (selection, bool, error) {
+	switch layoutName {
+	case layoutDeck:
+		home, _ := os.UserHomeDir()
+		// Session-specific model when the pane's Claude session is
+		// resolvable; global settings otherwise (V7/P3.5, M3-DECK.md).
+		var provider agent.Provider = claude.New(home)
+		panePID, _ := client.PanePID(pane)
+		paneCwd, _ := client.PaneCwd(pane)
+		state := provider.State(panePID, paneCwd)
+		final, err := tea.NewProgram(app.New(cmds, layout.Default(cmds, state))).Run()
+		if err != nil {
+			return selection{}, false, fmt.Errorf("pick: %w", err)
+		}
+		model := final.(app.Model)
+		sel, ok := model.Selection()
+		return selection{cmd: sel, arg: model.Arg(), insertOnly: model.InsertOnly()}, ok, nil
+	default: // telescope
+		final, err := tea.NewProgram(palette.New(cmds)).Run()
+		if err != nil {
+			return selection{}, false, fmt.Errorf("pick: %w", err)
+		}
+		model := final.(palette.Model)
+		sel, ok := model.Selection()
+		return selection{cmd: sel, insertOnly: model.InsertOnly()}, ok, nil
 	}
-	if err := client.Inject(*pane, text, opts); err != nil {
+}
+
+// injectSelection delivers the selection to the target pane. The target
+// can die while the UI is open, and popup stderr is invisible — failures
+// surface in the tmux status line instead.
+func injectSelection(client *tmux.Client, pane string, pick selection) error {
+	text, opts := buildInjection(pick)
+	if !client.PaneExists(pane) {
+		_ = client.DisplayMessage(fmt.Sprintf("gearshifter: target pane %s is gone; %s not injected", pane, text))
+		return fmt.Errorf("pick: target pane %s is gone; %s not injected", pane, strings.TrimSpace(text))
+	}
+	if err := client.Inject(pane, text, opts); err != nil {
 		_ = client.DisplayMessage("gearshifter: inject failed: " + err.Error())
 		return fmt.Errorf("pick: %w", err)
 	}
@@ -200,12 +230,12 @@ func runPick(args []string) error {
 // bare (which misfires — e.g. /btw with no question); insertOnly (Tab)
 // requests the same treatment explicitly. A gear value satisfies the
 // argument itself — "/model opus", always-enter.
-func buildInjection(sel catalog.Command, arg string, insertOnly bool) (string, tmux.InjectOptions) {
-	text := "/" + sel.Name
+func buildInjection(pick selection) (string, tmux.InjectOptions) {
+	text := "/" + pick.cmd.Name
 	switch {
-	case arg != "":
-		return text + " " + arg, tmux.InjectOptions{}
-	case sel.RequiresArgument() || insertOnly:
+	case pick.HasArg():
+		return text + " " + pick.arg, tmux.InjectOptions{}
+	case pick.cmd.RequiresArgument() || pick.insertOnly:
 		return text + " ", tmux.InjectOptions{NoEnter: true}
 	}
 	return text, tmux.InjectOptions{}
