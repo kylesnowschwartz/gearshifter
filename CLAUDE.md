@@ -87,7 +87,8 @@ package importing agent-ouija.
 
 M0–M4 shipped, deck content settled from real usage data
 (DECK-CONTENT.md: default = MODEL/EFFORT gears + COMPACT/COPY/CLEAR/
-CONTEXT/RESUME/CONFIG six-pack; Kyle's `examples/kyle.toml` adds a GOAL
+CONTEXT/RESUME/CONFIG six-pack; the personalized example
+`examples/custom.toml` (né kyle.toml; Kyle's daily layout) adds a GOAL
 insert-tile, RADIO, RELOAD — its STYLE gear was REMOVED 2026-07-05:
 Claude Code dropped /output-style and /config rejects custom styles
 non-interactively; revival route = a /style command in the

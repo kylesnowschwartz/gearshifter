@@ -1,12 +1,13 @@
-# Kyle's daily deck (data-driven, DECK-CONTENT.md 2026-07-05): the
-# default's gears, the generic button 6-pack minus CONFIG/RESUME, plus
-# GOAL (insert — always takes a condition), RADIO, and the plugin-dev
-# loop. Pointed at by @gearshifter-layout in
-# dotfiles/tmux/.tmux.conf.local.
+# A customized deck: what a personal layout looks like beyond the
+# shipped default. Demonstrates what user layouts reach for — personal
+# slash commands (/goal, /radio), an insert tile (GOAL lands "/goal "
+# unexecuted, ready for its argument), a label override (RELOAD), and
+# wide span-4 buttons where the default went span-2. Point
+# @gearshifter-layout at a copy of this file and edit away.
 #
-# STYLE gear removed 2026-07-05: Claude Code dropped /output-style, and
-# /config outputStyle= rejects custom styles non-interactively — no
-# injectable path exists (DECK-CONTENT.md postscript).
+# No output-style gear: Claude Code dropped /output-style, and /config
+# outputStyle= rejects custom styles non-interactively — no injectable
+# path exists (DECK-CONTENT.md postscript).
 #
 # Needs ~22 popup rows (two-gear rail); bump @gearshifter-height if
 # the deck reports the canvas too small.

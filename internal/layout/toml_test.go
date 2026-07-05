@@ -128,12 +128,13 @@ func TestLoadErrorsNameTheLine(t *testing.T) {
 	}
 }
 
-// kyle.toml is a personal layout, not Default-pinned — but it must
-// always parse, and its insert feature must hold. (Its STYLE gear was
-// removed 2026-07-05: Claude Code dropped /output-style and /config
-// rejects custom styles non-interactively — DECK-CONTENT.md postscript.)
-func TestKyleLayoutLoads(t *testing.T) {
-	placements, err := Load("../../examples/kyle.toml", nil, agent.State{}, testStyles)
+// custom.toml is the personalized example (né kyle.toml), not
+// Default-pinned — but it must always parse, and its insert feature
+// must hold. (Its STYLE gear was removed 2026-07-05: Claude Code
+// dropped /output-style and /config rejects custom styles
+// non-interactively — DECK-CONTENT.md postscript.)
+func TestCustomLayoutLoads(t *testing.T) {
+	placements, err := Load("../../examples/custom.toml", nil, agent.State{}, testStyles)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +171,8 @@ func TestDenseLayoutLoads(t *testing.T) {
 	}
 }
 
-// The gearSetting output-style → state.Style mapping outlived kyle.toml's
+// The gearSetting output-style → state.Style mapping outlived the
+// personalized example's
 // STYLE gear (a plugin /style command could revive it — DECK-CONTENT.md
 // postscript), so a user layout carrying one must still live-mark.
 func TestStyleGearMarksLiveOutputStyle(t *testing.T) {
