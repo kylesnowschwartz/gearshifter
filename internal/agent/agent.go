@@ -12,6 +12,7 @@ package agent
 type State struct {
 	Model  string
 	Effort string
+	Style  string // output style
 }
 
 // Provider resolves the live State of the agent session running in the

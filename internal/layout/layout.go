@@ -58,9 +58,11 @@ func flow(entries []entry) []Placement {
 }
 
 // Default builds the default deck: gear rail (span 5, MODEL over EFFORT)
-// beside a 2×2 button field (span 4 each) — the φ split — with the
-// launcher as a full-width bottom bar. Placement order = reading order =
-// the app's focus order. state marks each gear's live value (V7).
+// beside a 2×3 button field (span 4 each) — the φ split — with the
+// launcher as a full-width bottom bar. Buttons are the data-ranked
+// generic built-ins from Kyle's real usage history (DECK-CONTENT.md,
+// 2026-07-05). Placement order = reading order = the app's focus order.
+// state marks each gear's live value (V7).
 func Default(commands []catalog.Command, state agent.State) []Placement {
 	model := widget.NewGear(findCommand(commands, "model"), "MODEL",
 		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan).
@@ -72,10 +74,12 @@ func Default(commands []catalog.Command, state agent.State) []Placement {
 
 	buttonSpan := deck.MainSpan / buttonsPerRow
 	for i, b := range []struct{ name, label string }{
-		{"review", "REVIEW"},
-		{"context", "CONTEXT"},
 		{"compact", "COMPACT"},
+		{"copy", "COPY"},
+		{"clear", "CLEAR"},
+		{"context", "CONTEXT"},
 		{"resume", "RESUME"},
+		{"config", "CONFIG"},
 	} {
 		btn := widget.NewButton(findCommand(commands, b.name), b.label, buttonSpan)
 		entries = append(entries, entry{btn, deck.RailSpan + (i%buttonsPerRow)*buttonSpan})

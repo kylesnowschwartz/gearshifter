@@ -28,10 +28,10 @@ func writeSettings(t *testing.T, content string) string {
 }
 
 func TestReadSettings(t *testing.T) {
-	home := writeSettings(t, `{"model":"claude-fable-5[1m]","effortLevel":"high","env":{"SECRET":"x"}}`)
+	home := writeSettings(t, `{"model":"claude-fable-5[1m]","effortLevel":"high","outputStyle":"butterfield","env":{"SECRET":"x"}}`)
 	s := readSettings(home)
-	if s.Model != "claude-fable-5[1m]" || s.Effort != "high" {
-		t.Errorf("got %+v, want model claude-fable-5[1m] effort high", s)
+	if s.Model != "claude-fable-5[1m]" || s.Effort != "high" || s.Style != "butterfield" {
+		t.Errorf("got %+v, want model claude-fable-5[1m] / effort high / style butterfield", s)
 	}
 }
 
@@ -42,7 +42,7 @@ func TestReadSettingsDegradesToZero(t *testing.T) {
 	if s := readSettings(writeSettings(t, "{not json")); s != (agent.State{}) {
 		t.Errorf("malformed file: got %+v, want zero", s)
 	}
-	if s := readSettings(writeSettings(t, `{"outputStyle":"x"}`)); s != (agent.State{}) {
+	if s := readSettings(writeSettings(t, `{"statusLine":"x"}`)); s != (agent.State{}) {
 		t.Errorf("fields absent: got %+v, want zero", s)
 	}
 }

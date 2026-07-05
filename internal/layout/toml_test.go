@@ -125,6 +125,38 @@ func TestLoadErrorsNameTheLine(t *testing.T) {
 	}
 }
 
+// kyle.toml is a personal layout, not Default-pinned — but it must
+// always parse, and its insert/style-gear features must hold.
+func TestKyleLayoutLoads(t *testing.T) {
+	placements, err := Load("../../examples/kyle.toml", nil, agent.State{Style: "mayo-clinic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var goal widget.Button
+	var style widget.Gear
+	for _, p := range placements {
+		if b, ok := p.Tile.(widget.Button); ok && b.Cmd.Name == "goal" {
+			goal = b
+		}
+		if g, ok := p.Tile.(widget.Gear); ok && g.Label == "STYLE" {
+			style = g
+		}
+	}
+	if !goal.Insert {
+		t.Error("GOAL must be an insert-only button (always takes a condition)")
+	}
+	if view := style.View(false, 24); !strings.Contains(view, "▐ mayo-clinic") {
+		t.Errorf("STYLE gear must mark the live output style:\n%s", view)
+	}
+}
+
+func TestLoadRejectsInsertOnNonButtons(t *testing.T) {
+	_, err := Load(writeLayout(t, "[[tile]]\ntype = \"launcher\"\ninsert = true"), nil, agent.State{})
+	if err == nil || !strings.Contains(err.Error(), "insert = true applies only to buttons") {
+		t.Errorf("insert on a launcher must error with words, got %v", err)
+	}
+}
+
 func TestLoadMissingFile(t *testing.T) {
 	if _, err := Load(filepath.Join(t.TempDir(), "absent.toml"), nil, agent.State{}); err == nil {
 		t.Error("missing file must error")

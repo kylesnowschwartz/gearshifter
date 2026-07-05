@@ -15,9 +15,12 @@ import (
 )
 
 // TileActivatedMsg reports a fired tile; the app layer translates it into
-// an injection (past-tense intent, ARCHITECTURE.md §3).
+// an injection (past-tense intent, ARCHITECTURE.md §3). Insert asks for
+// insert-without-Enter — the tile-level Tab (D2 policy): "/goal " lands
+// in the prompt ready for its argument instead of firing bare.
 type TileActivatedMsg struct {
 	Command catalog.Command
+	Insert  bool
 }
 
 // GearShiftedMsg reports a committed gear value; the app injects
@@ -102,19 +105,26 @@ func center(s string, width int) string {
 
 // Button fires a slash command: big centered label, dim /command sublabel.
 type Button struct {
-	Cmd   catalog.Command
-	Label string
-	span  int
+	Cmd    catalog.Command
+	Label  string
+	Insert bool // insert-without-Enter instead of firing (layout.toml `insert = true`)
+	span   int
 }
 
 func NewButton(cmd catalog.Command, label string, span int) Button {
 	return Button{Cmd: cmd, Label: label, span: span}
 }
 
+// WithInsert makes the button insert "/cmd " without Enter when fired.
+func (b Button) WithInsert() Button {
+	b.Insert = true
+	return b
+}
+
 // buttonContentRows: big centered label + dim /command sublabel.
 const buttonContentRows = 2
 
-func (b Button) Activate() tea.Msg { return TileActivatedMsg{Command: b.Cmd} }
+func (b Button) Activate() tea.Msg { return TileActivatedMsg{Command: b.Cmd, Insert: b.Insert} }
 func (b Button) Span() int         { return b.span }
 func (b Button) Rows() int         { return borderRows + buttonContentRows }
 

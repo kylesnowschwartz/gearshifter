@@ -118,13 +118,13 @@ host_screen | rg -q 'MODEL' && ok "gear rail visible" || bad "gear rail visible"
 
 echo "8. clicking a button tile fires its command end-to-end"
 SCREEN=$(host_screen)
-ROW=$(echo "$SCREEN" | grep -n 'REVIEW' | head -1 | cut -d: -f1 || true)
-if [ -z "$ROW" ]; then bad "deck button click (REVIEW not found)"; else
+ROW=$(echo "$SCREEN" | grep -n 'COMPACT' | head -1 | cut -d: -f1 || true)
+if [ -z "$ROW" ]; then bad "deck button click (COMPACT not found)"; else
   LINE=$(echo "$SCREEN" | sed -n "${ROW}p")
-  PREFIX=${LINE%%REVIEW*}
+  PREFIX=${LINE%%COMPACT*}
   click_at $(( ${#PREFIX} + 3 )) "$ROW"
   sleep 1.5
-  origin_screen | rg -q 'no such file.*review' && ok "deck button click" || bad "deck button click"
+  origin_screen | rg -q 'no such file.*compact' && ok "deck button click" || bad "deck button click"
 fi
 
 echo "9. clicking a gear value injects '/model <value>'"

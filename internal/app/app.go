@@ -182,6 +182,7 @@ func (m Model) activate(intent tea.Msg) (tea.Model, tea.Cmd) {
 	case widget.TileActivatedMsg:
 		sel := intent.Command
 		m.selected = &sel
+		m.insertOnly = intent.Insert
 		return m, tea.Quit
 	case widget.GearShiftedMsg:
 		sel := intent.Command

@@ -54,8 +54,12 @@ Sources of truth (all in `.agent-history/`, git-ignored, disk-only):
 
 ## State / next steps
 
-M0–M4 shipped; **M5 aesthetic is next**; distribution is parked as M6
-until someone besides Kyle wants an install. The deck is the default UI;
+M0–M4 shipped, deck content settled from real usage data
+(DECK-CONTENT.md: default = MODEL/EFFORT gears + COMPACT/COPY/CLEAR/
+CONTEXT/RESUME/CONFIG six-pack; Kyle's `examples/kyle.toml` adds a STYLE
+gear, GOAL insert-tile, RADIO, RELOAD); **M5 aesthetic is next**;
+distribution is parked as M6 until someone besides Kyle wants an
+install. The deck is the default UI;
 a `run-shell .../gearshifter.tmux` line in tmux.conf owns the permanent
 `prefix+C-g` binding (`just bind-dev` sources the same file for dev);
 `@gearshifter-layout/width/height` are honored at keypress time;

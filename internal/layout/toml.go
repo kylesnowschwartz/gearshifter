@@ -24,6 +24,7 @@ type tomlTile struct {
 	Values  []string `toml:"values"`
 	Col     int      `toml:"col"`
 	Span    *int     `toml:"span"`
+	Insert  bool     `toml:"insert"` // buttons only: insert "/cmd " without Enter
 }
 
 type tomlLayout struct {
@@ -102,6 +103,9 @@ func tileLines(raw []byte) []int {
 // vocabulary is the archetype set (ARCHITECTURE.md §7): config type=
 // matches the widget type names, and users don't script new ones.
 func buildTile(t tomlTile, commands []catalog.Command, state agent.State) (widget.Tile, error) {
+	if t.Insert && t.Type != "button" {
+		return nil, fmt.Errorf("insert = true applies only to buttons, not %q", t.Type)
+	}
 	switch t.Type {
 	case "button":
 		name, err := commandName(t)
@@ -112,7 +116,11 @@ func buildTile(t tomlTile, commands []catalog.Command, state agent.State) (widge
 		if err != nil {
 			return nil, err
 		}
-		return widget.NewButton(findCommand(commands, name), labelOf(t, name), span), nil
+		btn := widget.NewButton(findCommand(commands, name), labelOf(t, name), span)
+		if t.Insert {
+			btn = btn.WithInsert()
+		}
+		return btn, nil
 	case "gear":
 		name, err := commandName(t)
 		if err != nil {
@@ -188,6 +196,8 @@ func gearSetting(name string, state agent.State) string {
 		return state.Model
 	case "effort":
 		return state.Effort
+	case "output-style":
+		return state.Style
 	}
 	return ""
 }

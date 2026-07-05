@@ -48,14 +48,14 @@ func press(m Model, keys ...string) Model {
 	return m
 }
 
-// Focus order: 0 MODEL, 1 EFFORT, 2 REVIEW, 3 CONTEXT, 4 COMPACT,
-// 5 RESUME, 6 launcher.
+// Focus order: 0 MODEL, 1 EFFORT, 2 COMPACT, 3 COPY, 4 CLEAR,
+// 5 CONTEXT, 6 RESUME, 7 CONFIG, 8 launcher.
 
 func TestFocusWalksAndEnterFires(t *testing.T) {
-	m := press(newTestModel(), "l", "l", "enter") // MODEL → EFFORT → REVIEW
+	m := press(newTestModel(), "l", "l", "enter") // MODEL → EFFORT → COMPACT
 	sel, ok := m.Selection()
-	if !ok || sel.Name != "review" {
-		t.Errorf("Selection() = %v %v, want review", sel.Name, ok)
+	if !ok || sel.Name != "compact" {
+		t.Errorf("Selection() = %v %v, want compact", sel.Name, ok)
 	}
 	if m.InsertOnly() || m.Arg() != "" {
 		t.Error("deck button fire must be plain: no insert-only, no arg")
@@ -120,15 +120,18 @@ func TestEscOnDeckQuitsWithoutSelection(t *testing.T) {
 
 func TestClickFiresButton(t *testing.T) {
 	m := newTestModel()
-	// REVIEW sits at grid col 5 span 4, body row 0 — compute the same
+	// COMPACT sits at grid col 5 span 4, body row 0 — compute the same
 	// geometry the app does and click inside it.
 	g := deck.New(82 - 2)
 	x, _ := g.Cell(deck.RailSpan, 4)
 	updated, _ := m.Update(tea.MouseClickMsg{X: 1 + x + 2, Y: 3, Button: tea.MouseLeft})
 	m = updated.(Model)
 	sel, ok := m.Selection()
-	if !ok || sel.Name != "review" {
-		t.Errorf("click on REVIEW selected %v %v, want review", sel.Name, ok)
+	if !ok || sel.Name != "compact" {
+		t.Errorf("click on COMPACT selected %v %v, want compact", sel.Name, ok)
+	}
+	if m.InsertOnly() {
+		t.Error("a plain button click must not request insert-only")
 	}
 }
 
@@ -157,8 +160,9 @@ func TestClickGearBorderOnlyFocuses(t *testing.T) {
 
 func TestClickLauncherOpensPalette(t *testing.T) {
 	m := newTestModel()
-	// Launcher bar: bodyY(2) + rail 13 + gap 1 = y16; click its content row.
-	updated, _ := m.Update(tea.MouseClickMsg{X: 10, Y: 17, Button: tea.MouseLeft})
+	// Launcher bar: the 2×3 button field bottoms at 16 (> rail 15), so the
+	// skyline drops the launcher to y17; click its content row.
+	updated, _ := m.Update(tea.MouseClickMsg{X: 10, Y: 18, Button: tea.MouseLeft})
 	m = updated.(Model)
 	if m.screen != screenPalette {
 		t.Error("click on launcher bar must open the palette")
@@ -228,7 +232,7 @@ func TestEmptyDeckNeverPanics(t *testing.T) {
 
 func TestDeckViewRendersTiles(t *testing.T) {
 	content := newTestModel().View().Content
-	for _, want := range []string{"GEARSHIFTER", "MODEL", "sonnet", "EFFORT", "max", "ALL COMMANDS…", "REVIEW", "/review", "CONTEXT", "COMPACT", "RESUME"} {
+	for _, want := range []string{"GEARSHIFTER", "MODEL", "sonnet", "EFFORT", "max", "ALL COMMANDS…", "COMPACT", "/compact", "COPY", "CLEAR", "CONTEXT", "RESUME", "CONFIG"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("deck view missing %q", want)
 		}

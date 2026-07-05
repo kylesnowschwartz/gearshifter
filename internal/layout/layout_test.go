@@ -10,7 +10,7 @@ import (
 
 func TestDefaultPlacementOrderIsReadingOrder(t *testing.T) {
 	placements := Default(nil, agent.State{})
-	want := []string{"MODEL", "EFFORT", "REVIEW", "CONTEXT", "COMPACT", "RESUME"}
+	want := []string{"MODEL", "EFFORT", "COMPACT", "COPY", "CLEAR", "CONTEXT", "RESUME", "CONFIG"}
 	if len(placements) != len(want)+1 {
 		t.Fatalf("Default yields %d placements, want %d", len(placements), len(want)+1)
 	}

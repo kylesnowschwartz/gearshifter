@@ -24,9 +24,10 @@ func readSettings(home string) agent.State {
 	var s struct {
 		Model  string `json:"model"`
 		Effort string `json:"effortLevel"`
+		Style  string `json:"outputStyle"`
 	}
 	if err := json.Unmarshal(raw, &s); err != nil {
 		return agent.State{}
 	}
-	return agent.State{Model: s.Model, Effort: s.Effort}
+	return agent.State{Model: s.Model, Effort: s.Effort, Style: s.Style}
 }
