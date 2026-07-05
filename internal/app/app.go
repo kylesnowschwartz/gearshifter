@@ -83,6 +83,10 @@ func (m Model) View() tea.View {
 	var view tea.View
 	view.AltScreen = true
 	view.MouseMode = tea.MouseModeCellMotion // requested from P0 so tmux never scrolls
+	// Colored themes own the popup surface (nil = terminal default);
+	// without this, FgBase text vanishes on light terminals.
+	view.BackgroundColor = m.styles.Background
+	view.ForegroundColor = m.styles.Foreground
 	if m.width == 0 {
 		return view
 	}
@@ -221,7 +225,7 @@ func (m Model) arm() (tea.Model, tea.Cmd) {
 // openPalette swaps in a fresh palette sized to the current canvas.
 func (m Model) openPalette() (tea.Model, tea.Cmd) {
 	m.screen = screenPalette
-	m.palette = palette.New(m.commands, m.styles.List)
+	m.palette = palette.New(m.commands, m.styles)
 	updated, _ := m.palette.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 	m.palette = updated.(palette.Model)
 	return m, nil

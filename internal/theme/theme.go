@@ -49,6 +49,14 @@ type Palette struct {
 // widget. Zero raw colors here or below — change the Palette, the whole
 // deck follows.
 type Styles struct {
+	// Background/Foreground paint the popup surface: colored themes own
+	// their canvas instead of inheriting the terminal's (the deck was
+	// designed on BgBase; on a light terminal FgBase text vanishes —
+	// posting/superfile lesson, TUI-AESTHETICS.md §1). nil = terminal
+	// default (plain, which is attribute-only and adapts anywhere).
+	Background color.Color
+	Foreground color.Color
+
 	Button   ButtonStyles
 	Gear     GearStyles
 	Launcher LauncherStyles
@@ -120,6 +128,8 @@ func New(p Palette) *Styles {
 	labelFocus := lipgloss.NewStyle().Foreground(p.Accent).Reverse(true)
 	armed := lipgloss.NewStyle().Bold(true).Foreground(p.OnAccent).Background(p.Accent)
 	return &Styles{
+		Background: p.BgBase,
+		Foreground: p.FgBase,
 		Button: ButtonStyles{
 			Box:        box,
 			BoxFocus:   boxFocus,

@@ -31,7 +31,7 @@ func debugLog(msg tea.Msg) {
 // value is not usable; construct with New.
 type Model struct {
 	commands   []catalog.Command
-	styles     theme.ListStyles
+	styles     *theme.Styles
 	query      string
 	visible    []int // indices into commands, ranked by filter match
 	cursor     int   // position within visible
@@ -43,8 +43,8 @@ type Model struct {
 }
 
 // New returns a palette over the given commands, expected pre-sorted by
-// catalog.Build, styled by the theme's list registry.
-func New(commands []catalog.Command, st theme.ListStyles) Model {
+// catalog.Build, styled by the theme registry (List styles + surface).
+func New(commands []catalog.Command, st *theme.Styles) Model {
 	return Model{
 		commands: commands,
 		styles:   st,
@@ -155,19 +155,23 @@ func (m *Model) setQuery(q string) {
 
 func (m Model) View() tea.View {
 	var b strings.Builder
-	b.WriteString(m.styles.Prompt.Render("> "+m.query) + "█\n")
+	b.WriteString(m.styles.List.Prompt.Render("> "+m.query) + "█\n")
 	last := min(m.offset+m.pageSize(), len(m.visible))
 	for i := m.offset; i < last; i++ {
 		b.WriteString(m.renderRow(i))
 		b.WriteByte('\n')
 	}
 	if len(m.visible) == 0 {
-		b.WriteString(m.styles.Hint.Render("no commands match") + "\n")
+		b.WriteString(m.styles.List.Hint.Render("no commands match") + "\n")
 	}
 	fmt.Fprintf(&b, "%d/%d · enter run · tab insert · esc cancel", len(m.visible), len(m.commands))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
+	// Colored themes own the surface (nil = terminal default) — same
+	// contract as the deck view, so the launcher swap never color-pops.
+	v.BackgroundColor = m.styles.Background
+	v.ForegroundColor = m.styles.Foreground
 	return v
 }
 
@@ -184,10 +188,10 @@ func (m Model) renderRow(i int) string {
 		}
 		return s.Render(text)
 	}
-	badge := style(m.styles.Badge, "["+c.Source+"]")
+	badge := style(m.styles.List.Badge, "["+c.Source+"]")
 	left := "/" + c.Name
 	if c.ArgumentHint != "" {
-		left += " " + style(m.styles.Hint, c.ArgumentHint)
+		left += " " + style(m.styles.List.Hint, c.ArgumentHint)
 	}
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(badge) - 1
 	if gap < 1 {
@@ -196,7 +200,7 @@ func (m Model) renderRow(i int) string {
 	}
 	row := left + strings.Repeat(" ", gap) + badge
 	if focused {
-		return m.styles.Cursor.Render(row)
+		return m.styles.List.Cursor.Render(row)
 	}
 	return row
 }

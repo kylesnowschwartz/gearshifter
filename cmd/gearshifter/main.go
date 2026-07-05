@@ -207,7 +207,7 @@ func resolveLayout(name string) (inbuilt, path string, err error) {
 func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, styles *theme.Styles, client *tmux.Client, pane string) (selection, bool, error) {
 	switch inbuilt {
 	case layoutTelescope:
-		final, err := tea.NewProgram(palette.New(cmds, styles.List)).Run()
+		final, err := tea.NewProgram(palette.New(cmds, styles)).Run()
 		if err != nil {
 			return selection{}, false, fmt.Errorf("pick: %w", err)
 		}

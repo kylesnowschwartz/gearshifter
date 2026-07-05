@@ -37,6 +37,19 @@ func TestPlainRendersNoColor(t *testing.T) {
 	}
 }
 
+func TestColoredThemesOwnTheSurfacePlainInherits(t *testing.T) {
+	// Colored palettes are designed on their own bg ramp; inheriting the
+	// terminal background makes FgBase text vanish on light terminals
+	// (found live, 2026-07-05). plain must keep nil = terminal default.
+	def, _ := Load("default")
+	if def.Background == nil || def.Foreground == nil {
+		t.Error("default theme must paint the popup surface")
+	}
+	if p := Plain(); p.Background != nil || p.Foreground != nil {
+		t.Error("plain must inherit the terminal's surface")
+	}
+}
+
 func TestDefaultThemeColorsWithoutBreakingText(t *testing.T) {
 	st, _ := Load("default")
 	out := st.Gear.ValueCurrent.Render("▐ opus")
