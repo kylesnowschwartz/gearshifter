@@ -144,6 +144,23 @@ func (g Gear) WithCursor(i int) Gear {
 	return g
 }
 
+// WithCurrent marks the session's live value (▐ + bold) and starts the
+// cursor there. Settings values come in several shapes — "opus" but also
+// "claude-fable-5[1m]" — so a value matches when it appears inside the
+// setting (case-insensitive). No match = stateless render, no mark.
+func (g Gear) WithCurrent(setting string) Gear {
+	g.current = -1
+	setting = strings.ToLower(setting)
+	for i, v := range g.Values {
+		if setting == v || (setting != "" && strings.Contains(setting, strings.ToLower(v))) {
+			g.current = i
+			g.cursor = i
+			break
+		}
+	}
+	return g
+}
+
 // ValueAt maps a row offset inside the tile (0 = top border) to a value
 // index, for mouse hits.
 func (g Gear) ValueAt(rowInTile int) (int, bool) {

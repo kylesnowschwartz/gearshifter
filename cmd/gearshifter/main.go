@@ -155,7 +155,8 @@ func runPick(args []string) error {
 	var ok, insertOnly bool
 	switch *layout {
 	case layoutDeck:
-		final, err := tea.NewProgram(app.New(cmds)).Run()
+		home, _ := os.UserHomeDir()
+		final, err := tea.NewProgram(app.New(cmds, catalog.ReadGearState(home))).Run()
 		if err != nil {
 			return fmt.Errorf("pick: %w", err)
 		}

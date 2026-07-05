@@ -21,7 +21,9 @@ func testCommands() []catalog.Command {
 }
 
 func newTestModel() Model {
-	m := New(testCommands())
+	// haiku/low: cursors start on current (index 0), keeping key-walk
+	// expectations simple.
+	m := New(testCommands(), catalog.GearState{Model: "haiku", Effort: "low"})
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 20})
 	return updated.(Model)
 }
@@ -175,6 +177,13 @@ func TestWheelMovesFocus(t *testing.T) {
 	m = updated.(Model)
 	if m.focus != 1 {
 		t.Errorf("wheel down: focus = %d, want 1", m.focus)
+	}
+}
+
+func TestDeckViewMarksCurrentGearValues(t *testing.T) {
+	content := newTestModel().View().Content
+	if !strings.Contains(content, "▐ haiku") || !strings.Contains(content, "▐ low") {
+		t.Error("deck must mark the live model/effort from GearState")
 	}
 }
 

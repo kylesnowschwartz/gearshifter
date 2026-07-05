@@ -57,17 +57,19 @@ type Model struct {
 // New builds the default deck layout from the catalog: gear rail (span 5,
 // MODEL over EFFORT) beside a 2×2 button field (span 4 each) — the φ
 // split — with the launcher as a full-width bottom bar. Focus order =
-// reading order.
-func New(commands []catalog.Command) Model {
+// reading order. state marks each gear's live value (V7).
+func New(commands []catalog.Command, state catalog.GearState) Model {
 	m := Model{commands: commands}
 	add := func(t widget.Tile, col, y int) {
 		m.order = append(m.order, &placement{tile: t, col: col, y: y})
 	}
 
 	model := widget.NewGear(findCommand(commands, "model"), "MODEL",
-		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan)
+		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan).
+		WithCurrent(state.Model)
 	effort := widget.NewGear(findCommand(commands, "effort"), "EFFORT",
-		[]string{"low", "medium", "high", "max"}, deck.RailSpan)
+		[]string{"low", "medium", "high", "max"}, deck.RailSpan).
+		WithCurrent(state.Effort)
 	add(model, 0, bodyY)
 	add(effort, 0, bodyY+model.Rows()+rowGap)
 
