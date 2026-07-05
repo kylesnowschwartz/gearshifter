@@ -37,7 +37,7 @@ const usage = `gearshifter — a tmux control deck for Claude Code slash command
 
 Usage:
   gearshifter pick --pane PANE [--cwd DIR] [--sources ...] [--layout NAME] [--theme NAME]
-  gearshifter strip [--pane PANE] [--cwd DIR] [--sources ...] [--layout NAME] [--theme NAME]
+  gearshifter strip [--pane PANE] [--cwd DIR] [--sources ...] [--layout NAME] [--theme NAME] [--compact]
   gearshifter list [--cwd DIR] [--sources user,project,builtin,plugin]
   gearshifter inject --pane PANE [--no-enter] [--no-clear] TEXT
   gearshifter version
@@ -53,7 +53,8 @@ Subcommands:
            across fires, injecting each fired tile into the window's
            Claude pane — auto-detected at fire time, or pinned with
            --pane — and re-polling gear state every few seconds.
-           Same --layout choices as pick, minus telescope.
+           Same --layout choices as pick, minus telescope. --compact
+           renders 1-row glyph chips for narrow sidebar panes.
   list     Print the available slash commands as TSV: name, source,
            argument hint, description. Default sources are
            user,project,builtin; add plugin explicitly to include
@@ -207,6 +208,7 @@ func runStrip(args []string) error {
 	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
 	layoutName := fs.String("layout", defaultLayout, "UI layout: deck or a path to a layout.toml (telescope quits on selection — not strip-compatible)")
 	themeName := fs.String("theme", "default", "color theme: default, or plain (no color)")
+	compact := fs.Bool("compact", false, "render the chip flow (1-row glyph chips) — sized for a ~33-col sidebar pane")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -277,7 +279,11 @@ func runStrip(args []string) error {
 		// so the first poll that matches it can't snap gear cursors.
 		Seed: layout.GearSettings(state),
 	}
-	if _, err := tea.NewProgram(app.New(cmds, placements, styles).Persistent(hooks)).Run(); err != nil {
+	model := app.New(cmds, placements, styles).Persistent(hooks)
+	if *compact {
+		model = app.New(cmds, layout.Compacted(placements, state, styles), styles).Persistent(hooks).Compact()
+	}
+	if _, err := tea.NewProgram(model).Run(); err != nil {
 		return fmt.Errorf("strip: %w", err)
 	}
 	return nil

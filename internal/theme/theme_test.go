@@ -81,3 +81,20 @@ func TestDefaultThemeColorsWithoutBreakingText(t *testing.T) {
 		t.Error("default theme must actually style the current value row")
 	}
 }
+
+// Every chip glyph must render exactly one cell — a two-cell glyph
+// shifts every chip after it and desyncs the compositor's hit-testing
+// (the curation rule the table promises).
+func TestGlyphsAreSingleCell(t *testing.T) {
+	for _, name := range GlyphNames() {
+		if g := Glyph(name); lipgloss.Width(g) != 1 {
+			t.Errorf("glyph for %q (%q) is %d cells, want 1", name, g, lipgloss.Width(g))
+		}
+	}
+	if lipgloss.Width(GlyphFallback) != 1 {
+		t.Errorf("fallback glyph %q must be one cell", GlyphFallback)
+	}
+	if Glyph("no-such-command") != GlyphFallback {
+		t.Error("unknown commands must get the fallback glyph")
+	}
+}

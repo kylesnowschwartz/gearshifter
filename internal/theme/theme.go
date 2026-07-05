@@ -24,6 +24,52 @@ const (
 	MarkBlank   = "  " // gear row: everything else
 )
 
+// glyphs maps command names to their compact-chip glyph (STRIP-EMBED
+// step 2). Curated: every entry must render exactly one cell (pinned by
+// test) and avoid emoji presentation (VS16 forces two cells in most
+// terminals). Coverage beyond width is Kyle's-eyeball territory — a
+// glyph a font lacks shows as tofu, not a layout break.
+var glyphs = map[string]string{
+	"compact":        "▣",
+	"copy":           "⧉",
+	"clear":          "⌫",
+	"context":        "◔",
+	"resume":         "↻",
+	"config":         "⚙",
+	"agents":         "✦",
+	"memory":         "◆",
+	"cost":           "¤",
+	"doctor":         "✚",
+	"export":         "↥",
+	"statusline":     "▤",
+	"hooks":          "⌁",
+	"mcp":            "⬡",
+	"permissions":    "⚿",
+	"reload-plugins": "⟳",
+}
+
+// GlyphFallback marks chips for commands the table doesn't know.
+const GlyphFallback = "•"
+
+// Glyph returns the chip glyph for a command name.
+func Glyph(name string) string {
+	if g, ok := glyphs[name]; ok {
+		return g
+	}
+	return GlyphFallback
+}
+
+// GlyphNames lists every command in the glyph table (width test +
+// future docs).
+func GlyphNames() []string {
+	names := make([]string, 0, len(glyphs))
+	for n := range glyphs {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // Palette is the role layer: every color the UI may use, by semantic
 // role. Hierarchy comes from the fg/bg ramps (base → subtle → muted),
 // not one-off values; the bg ramp and OnAccent are reserved for the P2

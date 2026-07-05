@@ -95,6 +95,18 @@ type Model struct {
 	hooks        PersistentHooks
 	notice       string
 	lastSettings map[string]string
+
+	// compact renders the chip flow instead of the 13-column grid
+	// (STRIP-EMBED step 2): tiles pack left-to-right by natural width,
+	// wrapping at the canvas edge — built for the ~33-col tcm sidebar.
+	compact bool
+}
+
+// Compact flips the model to the chip-flow rendering; the placements
+// must already be chip tiles (layout.Compacted).
+func (m Model) Compact() Model {
+	m.compact = true
+	return m
 }
 
 // New builds the app over a placed deck (layout.Default or, from P4, a
@@ -184,6 +196,11 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			}
+			// Esc closes an expanded gear chip before it means quit —
+			// backing out of the value row is the smaller retreat.
+			if key.String() == "esc" && m.collapseGearChips() {
+				return m, nil
+			}
 			return m, tea.Quit
 		}
 	}
@@ -224,6 +241,7 @@ func (m Model) handleDeckClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.focus = i
+	m.collapseGearChipsExcept(i)
 	if g, isGear := m.order[i].Tile.(widget.Gear); isGear {
 		// Gated column: each value row is its own target — one click
 		// to any state. Border/label clicks just focus.
@@ -234,7 +252,40 @@ func (m Model) handleDeckClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if gc, isChip := m.order[i].Tile.(widget.GearChip); isChip {
+		// Chip form: first click opens the value row; a click on a value
+		// fires it and collapses (the gated column rotated 90°).
+		if !gc.Expanded {
+			m.order[i].Tile = gc.Expand()
+			return m, nil
+		}
+		if v, ok := gc.ValueAtX(msg.X - hit.Bounds().Min.X); ok {
+			gc = gc.WithCursor(v)
+			m.order[i].Tile = gc.Collapse()
+			return m.activate(gc.Activate())
+		}
+		return m, nil
+	}
 	return m.activate(m.order[i].Tile.Activate())
+}
+
+// collapseGearChips closes every expanded gear chip; true when one was
+// open (Esc consumes the keypress in that case).
+func (m Model) collapseGearChips() bool {
+	return m.collapseGearChipsExcept(-1)
+}
+
+// collapseGearChipsExcept closes expanded gear chips other than i — a
+// click or focus move elsewhere retracts an open value row.
+func (m Model) collapseGearChipsExcept(i int) bool {
+	closed := false
+	for j, p := range m.order {
+		if gc, ok := p.Tile.(widget.GearChip); ok && gc.Expanded && j != i {
+			m.order[j].Tile = gc.Collapse()
+			closed = true
+		}
+	}
+	return closed
 }
 
 // handleDeckMotion is hover: the focus ring follows the pointer, and
@@ -254,6 +305,11 @@ func (m Model) handleDeckMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 			m.order[i].Tile = g.WithCursor(v)
 		}
 	}
+	if gc, isChip := m.order[i].Tile.(widget.GearChip); isChip && gc.Expanded {
+		if v, ok := gc.ValueAtX(msg.X - hit.Bounds().Min.X); ok {
+			m.order[i].Tile = gc.WithCursor(v)
+		}
+	}
 	return m, nil
 }
 
@@ -270,8 +326,28 @@ func (m Model) handleDeckWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 // handleDeckKey owns everything below the quit keys (those live in
 // updateDeck so they survive a degraded canvas).
 func (m Model) handleDeckKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	// An expanded gear chip captures navigation until it collapses —
+	// its value row is a one-line modal (Esc backs out, in updateDeck).
+	if gc, ok := m.order[m.focus].Tile.(widget.GearChip); ok && gc.Expanded {
+		switch key.String() {
+		case "left", "h", "up", "k":
+			m.order[m.focus].Tile = gc.CursorPrev()
+			return m, nil
+		case "right", "l", "down", "j":
+			m.order[m.focus].Tile = gc.CursorNext()
+			return m, nil
+		case "enter":
+			m.order[m.focus].Tile = gc.Collapse()
+			return m.activate(gc.Activate())
+		}
+		return m, nil
+	}
 	switch key.String() {
 	case "enter":
+		if gc, ok := m.order[m.focus].Tile.(widget.GearChip); ok {
+			m.order[m.focus].Tile = gc.Expand()
+			return m, nil
+		}
 		return m.activate(m.order[m.focus].Tile.Activate())
 	case "left", "h", "shift+tab":
 		m.focus = wrapIndex(m.focus, -1, len(m.order))
@@ -414,15 +490,16 @@ func (m Model) refreshTick() tea.Cmd {
 // behavior.
 func (m Model) applyRefresh(settings map[string]string) Model {
 	for i, p := range m.order {
-		g, ok := p.Tile.(widget.Gear)
-		if !ok {
-			continue
+		switch g := p.Tile.(type) {
+		case widget.Gear:
+			if v, ok := settings[g.Cmd.Name]; ok && v != m.lastSettings[g.Cmd.Name] {
+				m.order[i].Tile = g.WithCurrent(v)
+			}
+		case widget.GearChip:
+			if v, ok := settings[g.Cmd.Name]; ok && v != m.lastSettings[g.Cmd.Name] {
+				m.order[i].Tile = g.WithCurrent(v)
+			}
 		}
-		v, ok := settings[g.Cmd.Name]
-		if !ok || v == m.lastSettings[g.Cmd.Name] {
-			continue
-		}
-		m.order[i].Tile = g.WithCurrent(v)
 	}
 	m.lastSettings = settings
 	return m
@@ -437,18 +514,11 @@ var marginX = deck.Scale[0]
 // the header/footer. The same compositor renders the view AND answers
 // mouse hit-tests, so clicks can never disagree with pixels.
 func (m Model) compositor() *lipgloss.Compositor {
-	grid := deck.New(m.width - 2*marginX)
-
-	tileRows := 0
-	layers := make([]*lipgloss.Layer, 0, len(m.order)+1)
-	for i, p := range m.order {
-		x, w := grid.Cell(p.Col, p.Tile.Span())
-		rs := widget.RenderState{Focused: i == m.focus, Armed: m.armed && i == m.focus}
-		layers = append(layers, lipgloss.NewLayer(p.Tile.View(rs, w)).
-			ID("tile:"+strconv.Itoa(i)).X(marginX+x).Y(p.Y).Z(1))
-		if bottom := p.Y + p.Tile.Rows(); bottom > tileRows {
-			tileRows = bottom
-		}
+	layers, tileRows := m.gridLayers()
+	hint := "h/l tiles · j/k in gear · Enter fire · / all commands · Esc close"
+	if m.compact {
+		layers, tileRows = m.flowLayers()
+		hint = "Enter fire · / all · q quit"
 	}
 
 	// Base layer: the wordmark — the single authored grid break (Samara):
@@ -461,16 +531,92 @@ func (m Model) compositor() *lipgloss.Compositor {
 	for len(base) < tileRows+1 {
 		base = append(base, "")
 	}
-	footer := "h/l tiles · j/k in gear · Enter fire · / all commands · Esc close"
 	if m.notice != "" {
 		// Persistent mode's fire/error feedback replaces the hint line —
 		// the strip has no closing flash to say "it landed".
-		footer = m.notice
+		hint = m.notice
 	}
-	base = append(base, margin+m.styles.Chrome.Footer.Render(footer))
+	// The footer (hint or a long tmux error) must never exceed the
+	// canvas — over-wide lines clip cell-by-cell downstream, losing the
+	// tail silently; truncating here keeps the cut honest.
+	base = append(base, margin+m.styles.Chrome.Footer.Render(truncateCells(hint, max(0, m.width-2*marginX))))
 	baseLayer := lipgloss.NewLayer(strings.Join(base, "\n")).X(0).Y(0).Z(0)
 
 	return lipgloss.NewCompositor(append([]*lipgloss.Layer{baseLayer}, layers...)...)
+}
+
+// gridLayers places tiles by the 13-column grid (the popup deck).
+func (m Model) gridLayers() ([]*lipgloss.Layer, int) {
+	grid := deck.New(m.width - 2*marginX)
+	tileRows := 0
+	layers := make([]*lipgloss.Layer, 0, len(m.order))
+	for i, p := range m.order {
+		x, w := grid.Cell(p.Col, p.Tile.Span())
+		rs := widget.RenderState{Focused: i == m.focus, Armed: m.armed && i == m.focus}
+		layers = append(layers, lipgloss.NewLayer(p.Tile.View(rs, w)).
+			ID("tile:"+strconv.Itoa(i)).X(marginX+x).Y(p.Y).Z(1))
+		if bottom := p.Y + p.Tile.Rows(); bottom > tileRows {
+			tileRows = bottom
+		}
+	}
+	return layers, tileRows
+}
+
+// flowBodyY is the first chip row: right under the wordmark — a strip
+// pane has no rows to spare on breathing room.
+const flowBodyY = 1
+
+// flowLayers packs chips left-to-right by natural width, wrapping at
+// the canvas edge (STRIP-EMBED step 2). Order = placement order; an
+// over-wide tile (an expanded gear on a narrow pane) truncates in place
+// rather than overflowing the hit-test bounds.
+func (m Model) flowLayers() ([]*lipgloss.Layer, int) {
+	maxX := m.width - marginX
+	x, y := marginX, flowBodyY
+	layers := make([]*lipgloss.Layer, 0, len(m.order))
+	for i, p := range m.order {
+		w := flowWidth(p.Tile, maxX-marginX)
+		if x > marginX && x+w > maxX {
+			x, y = marginX, y+1
+		}
+		if w > maxX-x {
+			w = maxX - x
+		}
+		rs := widget.RenderState{Focused: i == m.focus, Armed: m.armed && i == m.focus}
+		layers = append(layers, lipgloss.NewLayer(p.Tile.View(rs, w)).
+			ID("tile:"+strconv.Itoa(i)).X(x).Y(y).Z(1))
+		x += w + 1
+	}
+	return layers, y + 1
+}
+
+// flowWidth is a tile's packed width: natural for chips, the full row
+// for anything else, clamped to the canvas.
+func flowWidth(t widget.Tile, maxW int) int {
+	w := maxW
+	if ft, ok := t.(widget.FlowTile); ok {
+		w = ft.NaturalWidth()
+	}
+	return min(w, maxW)
+}
+
+// truncateCells cuts plain text to at most w display cells (style is
+// applied after, one style per row — M2 gotcha).
+func truncateCells(s string, w int) string {
+	if lipgloss.Width(s) <= w {
+		return s
+	}
+	var b strings.Builder
+	x := 0
+	for _, r := range s {
+		rw := lipgloss.Width(string(r))
+		if x+rw > w {
+			break
+		}
+		b.WriteRune(r)
+		x += rw
+	}
+	return b.String()
 }
 
 // hitTile decodes a compositor hit back to an order index.
@@ -490,12 +636,35 @@ func hitTile(hit lipgloss.LayerHit) (int, bool) {
 // message instead of overdrawn tiles. The wordmark retracts with the
 // grid (layout law: breaks need a grid to break).
 func (m Model) minCanvas() (w, h int) {
+	if m.compact {
+		return m.flowMinCanvas()
+	}
 	for _, p := range m.order {
 		if bottom := p.Y + p.Tile.Rows(); bottom > h {
 			h = bottom
 		}
 	}
 	return 2*marginX + deck.MinWidth(), h
+}
+
+// flowMinCanvas: the widest COLLAPSED chip must fit one row (an
+// expanded gear clamps instead of raising the floor), and every flowed
+// row plus the footer must be on screen at the current width.
+func (m Model) flowMinCanvas() (w, h int) {
+	for _, p := range m.order {
+		var nw int
+		switch t := p.Tile.(type) {
+		case widget.GearChip:
+			nw = t.Collapse().NaturalWidth()
+		case widget.FlowTile:
+			nw = t.NaturalWidth()
+		}
+		if nw > w {
+			w = nw
+		}
+	}
+	_, bottom := m.flowLayers()
+	return w + 2*marginX, bottom + 1
 }
 
 func (m Model) canvasTooSmall() bool {

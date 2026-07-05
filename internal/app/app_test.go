@@ -6,12 +6,14 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 	"github.com/kylesnowschwartz/gearshifter/internal/deck"
 	"github.com/kylesnowschwartz/gearshifter/internal/layout"
 	"github.com/kylesnowschwartz/gearshifter/internal/theme"
+	"github.com/kylesnowschwartz/gearshifter/internal/widget"
 )
 
 var testStyles = theme.Plain()
@@ -460,5 +462,95 @@ func TestDeckViewRendersTiles(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Errorf("deck view missing %q", want)
 		}
+	}
+}
+
+// Compact (chip-flow) mode — STRIP-EMBED step 2 spike. 33 cols = the
+// tcm sidebar default width the flow is built for.
+
+func compactModel(fired *[]firedCall) Model {
+	state := agent.State{Model: "haiku", Effort: "low"}
+	cmds := testCommands()
+	placements := layout.Compacted(layout.Default(cmds, state, testStyles), state, testStyles)
+	m := New(cmds, placements, testStyles).Persistent(PersistentHooks{
+		Inject: func(cmd catalog.Command, arg string, insertOnly bool) error {
+			*fired = append(*fired, firedCall{cmd.Name, arg, insertOnly})
+			return nil
+		},
+		Seed: map[string]string{"model": "haiku", "effort": "low"},
+	}).Compact()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 33, Height: 20})
+	return updated.(Model)
+}
+
+func TestCompactFlowRendersWithin33Cols(t *testing.T) {
+	var fired []firedCall
+	content := compactModel(&fired).View().Content
+	for _, want := range []string{"GEARSHIFTER", "M:haiku", "E:low", "▣ COMPACT", "⧉ COPY", "ALL COMMANDS"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("compact view missing %q:\n%s", want, content)
+		}
+	}
+	for i, line := range strings.Split(content, "\n") {
+		if w := lipgloss.Width(line); w > 33 {
+			t.Errorf("line %d is %d cells — the flow must wrap inside the canvas:\n%q", i, w, line)
+		}
+	}
+}
+
+func TestCompactGearChipExpandNavigateFire(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+
+	// MODEL is the first chip: top-left of the flow. Click expands.
+	updated, _ := m.Update(tea.MouseClickMsg{X: 2, Y: 1, Button: tea.MouseLeft})
+	m = updated.(Model)
+	gc, ok := m.order[0].Tile.(widget.GearChip)
+	if !ok || !gc.Expanded {
+		t.Fatalf("click on the gear badge must expand it (got %T expanded=%v)", m.order[0].Tile, gc.Expanded)
+	}
+	if !strings.Contains(m.View().Content, "sonnet") {
+		t.Error("the expanded row must show every value")
+	}
+
+	// The expanded row captures navigation: l moves the cursor, Enter
+	// fires and collapses.
+	m = press(m, "l", "enter") // haiku → sonnet, fire
+	m = completeFire(t, m)
+	if len(fired) != 1 || fired[0].name != "model" || fired[0].arg != "sonnet" {
+		t.Fatalf("fired = %+v, want model/sonnet", fired)
+	}
+	if gc := m.order[0].Tile.(widget.GearChip); gc.Expanded {
+		t.Error("firing must collapse the value row")
+	}
+}
+
+func TestCompactEscCollapsesBeforeQuitting(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+	m = press(m, "enter") // expand MODEL (focus starts there)
+	if gc := m.order[0].Tile.(widget.GearChip); !gc.Expanded {
+		t.Fatal("enter on a collapsed gear chip must expand it")
+	}
+	updated, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+	m = updated.(Model)
+	if cmd != nil {
+		t.Error("esc with an open value row must collapse, not quit")
+	}
+	if gc := m.order[0].Tile.(widget.GearChip); gc.Expanded {
+		t.Error("esc must collapse the row")
+	}
+	if _, cmd = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape})); cmd == nil {
+		t.Error("a second esc (nothing open) must quit")
+	}
+}
+
+func TestCompactRefreshRemarksGearChips(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+	updated, _ := m.Update(stateRefreshMsg{"model": "claude-fable-5", "effort": "low"})
+	m = updated.(Model)
+	if !strings.Contains(m.View().Content, "M:fable") {
+		t.Errorf("a refresh must re-mark the gear chip badge:\n%s", m.View().Content)
 	}
 }
