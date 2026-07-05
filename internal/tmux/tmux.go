@@ -120,6 +120,14 @@ func (c *Client) PaneExists(pane string) bool {
 	return err == nil
 }
 
+// SelectPane focuses the target pane. Strip mode hands focus back to
+// the Claude pane after every fire — the click that fired stole it,
+// and the user's next keystroke belongs where the command landed.
+func (c *Client) SelectPane(pane string) error {
+	_, err := c.run.Run("", "select-pane", "-t", pane)
+	return err
+}
+
 // DisplayMessage flashes text in the tmux status line — the only error
 // surface a user can see after a display-popup has closed (popup stderr is
 // discarded).

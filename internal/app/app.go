@@ -201,6 +201,13 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.String() == "esc" && m.collapseGearChips() {
 				return m, nil
 			}
+			if key.String() == "esc" && m.hooks.Inject != nil {
+				// Persistent mode: esc is too easy to hit on the way to
+				// another pane, and losing the long-lived strip to a
+				// stray press is disproportionate (companion QA,
+				// 2026-07-06). q / ctrl+c stay the deliberate quits.
+				return m, nil
+			}
 			return m, tea.Quit
 		}
 	}
@@ -516,6 +523,11 @@ var marginX = deck.Scale[0]
 func (m Model) compositor() *lipgloss.Compositor {
 	layers, tileRows := m.gridLayers()
 	hint := "h/l tiles · j/k in gear · Enter fire · / all commands · Esc close"
+	if m.hooks.Inject != nil {
+		// Persistent mode never quits on esc — the hint must not claim
+		// otherwise.
+		hint = "h/l tiles · j/k in gear · Enter fire · / all commands · q quit"
+	}
 	if m.compact {
 		layers, tileRows = m.flowLayers()
 		hint = "Enter fire · / all · q quit"
@@ -566,19 +578,23 @@ func (m Model) gridLayers() ([]*lipgloss.Layer, int) {
 // pane has no rows to spare on breathing room.
 const flowBodyY = 1
 
-// flowLayers packs chips left-to-right by natural width, wrapping at
-// the canvas edge (STRIP-EMBED step 2). Order = placement order; an
-// over-wide tile (an expanded gear on a narrow pane) truncates in place
-// rather than overflowing the hit-test bounds. Gear chips own their
-// row: expanding one must never reflow the chips around it (Kyle's
-// spike QA — the in-place unfold was moving the whole field).
+// flowLayers packs chips onto a column grid, wrapping at the canvas
+// edge (STRIP-EMBED step 2). Every chip is granted the width of the
+// widest one and positions snap to column starts, so labels line up
+// row over row (companion QA 2026-07-06 — natural-width packing read
+// ragged). Wider tiles (the launcher, an expanded gear) span multiple
+// columns, truncating in place rather than overflowing the hit-test
+// bounds. Gear chips own their row: expanding one must never reflow
+// the chips around it (spike QA — the unfold was moving the field).
 func (m Model) flowLayers() ([]*lipgloss.Layer, int) {
 	maxX := m.width - marginX
+	colW := m.flowColWidth()
+	step := colW + 1
 	x, y := marginX, flowBodyY
 	layers := make([]*lipgloss.Layer, 0, len(m.order))
 	for i, p := range m.order {
 		_, ownRow := p.Tile.(widget.GearChip)
-		w := flowWidth(p.Tile, maxX-marginX)
+		w := max(colW, flowWidth(p.Tile, maxX-marginX))
 		if x > marginX && (ownRow || x+w > maxX) {
 			x, y = marginX, y+1
 		}
@@ -591,10 +607,32 @@ func (m Model) flowLayers() ([]*lipgloss.Layer, int) {
 		if ownRow {
 			x, y = marginX, y+1
 		} else {
-			x += w + 1
+			x += step * ((w + step) / step) // next column boundary past this tile
 		}
 	}
 	return layers, y + 1
+}
+
+// flowColWidth is the flow's column unit: the widest collapsed chip.
+// The launcher is excluded — its long label would force one-chip-per-
+// row columns, so it spans columns instead of defining them.
+func (m Model) flowColWidth() int {
+	w := 0
+	for _, p := range m.order {
+		var nw int
+		switch t := p.Tile.(type) {
+		case widget.LauncherChip:
+			continue
+		case widget.GearChip:
+			nw = t.Collapse().NaturalWidth()
+		case widget.FlowTile:
+			nw = t.NaturalWidth()
+		}
+		if nw > w {
+			w = nw
+		}
+	}
+	return w
 }
 
 // flowWidth is a tile's packed width: natural for chips, the full row

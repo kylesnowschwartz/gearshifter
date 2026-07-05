@@ -525,7 +525,7 @@ func TestCompactGearChipExpandNavigateFire(t *testing.T) {
 	}
 }
 
-func TestCompactEscCollapsesBeforeQuitting(t *testing.T) {
+func TestCompactEscCollapsesAndNeverQuits(t *testing.T) {
 	var fired []firedCall
 	m := compactModel(&fired)
 	m = press(m, "enter") // expand MODEL (focus starts there)
@@ -540,8 +540,28 @@ func TestCompactEscCollapsesBeforeQuitting(t *testing.T) {
 	if gc := m.order[0].Tile.(widget.GearChip); gc.Expanded {
 		t.Error("esc must collapse the row")
 	}
-	if _, cmd = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape})); cmd == nil {
-		t.Error("a second esc (nothing open) must quit")
+	// Persistent mode: a stray esc must never cost the long-lived strip
+	// (companion QA 2026-07-06) — q stays the deliberate quit.
+	if _, cmd = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape})); cmd != nil {
+		t.Error("esc with nothing open must be a no-op in persistent mode")
+	}
+	if _, cmd = m.Update(tea.KeyPressMsg(tea.Key{Text: "q"})); cmd == nil {
+		t.Error("q must still quit the persistent strip")
+	}
+}
+
+// Chips snap to a column grid so labels line up row over row
+// (companion QA 2026-07-06). The launcher spans columns instead of
+// defining them; gear rows use the same origin.
+func TestCompactChipsSnapToColumns(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+	step := m.flowColWidth() + 1
+	layers, _ := m.flowLayers()
+	for _, l := range layers {
+		if off := l.GetX() - marginX; off%step != 0 {
+			t.Errorf("layer at x=%d is off the column grid (step %d)", l.GetX(), step)
+		}
 	}
 }
 

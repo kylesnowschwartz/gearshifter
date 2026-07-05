@@ -65,6 +65,17 @@ func TestInjectNoEnterNoClear(t *testing.T) {
 	}
 }
 
+func TestSelectPane(t *testing.T) {
+	f := &fakeRunner{}
+	if err := NewClient(f).SelectPane("%7"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"select-pane -t %7"}
+	if !reflect.DeepEqual(f.calls, want) {
+		t.Errorf("call sequence:\n got %v\nwant %v", f.calls, want)
+	}
+}
+
 func TestInjectValidation(t *testing.T) {
 	c := NewClient(&fakeRunner{})
 	if err := c.Inject("", "/x", InjectOptions{}); err == nil {

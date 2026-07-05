@@ -261,7 +261,14 @@ func runStrip(args []string) error {
 			return err
 		}
 		text, opts := buildInjection(selection{cmd: cmd, arg: arg, insertOnly: insertOnly})
-		return client.Inject(target.ID, text, opts)
+		if err := client.Inject(target.ID, text, opts); err != nil {
+			return err
+		}
+		// Hand focus back: clicking the strip focused it, but after a
+		// fire the user's next keystroke belongs in the Claude pane
+		// (companion QA 2026-07-06). Best-effort — the injection landed.
+		_ = client.SelectPane(target.ID)
+		return nil
 	}
 	refresh := func() map[string]string {
 		target, err := resolve()
