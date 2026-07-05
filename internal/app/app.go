@@ -6,6 +6,7 @@
 package app
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -94,8 +95,8 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDeckClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
-	if msg.Button != tea.MouseLeft {
-		return m, nil
+	if msg.Button != tea.MouseLeft || m.canvasTooSmall() {
+		return m, nil // degraded render draws no tiles, so none can be hit
 	}
 	// Named-layer hit-testing (M3 P1 decision): the compositor knows
 	// every tile's bounds; a hit both focuses and fires — click = do.
@@ -132,6 +133,11 @@ func (m Model) handleDeckKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case "ctrl+c", "esc", "q":
 		return m, tea.Quit
+	}
+	if m.canvasTooSmall() {
+		return m, nil // never fire an invisible tile; only quit keys work degraded
+	}
+	switch key.String() {
 	case "enter":
 		return m.activate(m.order[m.focus].Tile.Activate())
 	case "left", "h", "shift+tab":
@@ -256,7 +262,33 @@ func hitTile(hit lipgloss.LayerHit) (int, bool) {
 	return i, err == nil
 }
 
+// minCanvas is the smallest canvas the current placements render on:
+// every grid column at least two cells wide, every tile row on screen
+// (the footer hint is allowed to clip first). The first, simple
+// degradation rule (M3-DECK P4): below this, fail with words — a clear
+// message instead of overdrawn tiles. The wordmark retracts with the
+// grid (layout law: breaks need a grid to break).
+func (m Model) minCanvas() (w, h int) {
+	for _, p := range m.order {
+		if bottom := p.Y + p.Tile.Rows(); bottom > h {
+			h = bottom
+		}
+	}
+	return 2*marginX + deck.MinWidth(), h
+}
+
+func (m Model) canvasTooSmall() bool {
+	w, h := m.minCanvas()
+	return m.width < w || m.height < h
+}
+
 func (m Model) viewDeck() string {
+	if m.canvasTooSmall() {
+		w, h := m.minCanvas()
+		return strings.Repeat(" ", marginX) + faint.Render(fmt.Sprintf(
+			"canvas %d×%d is too small for this layout (needs %d×%d) — enlarge the popup",
+			m.width, m.height, w, h))
+	}
 	return m.compositor().Render()
 }
 

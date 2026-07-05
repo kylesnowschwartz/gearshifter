@@ -1,10 +1,35 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 )
+
+func TestResolveLayout(t *testing.T) {
+	tomlPath := filepath.Join(t.TempDir(), "my.toml")
+	if err := os.WriteFile(tomlPath, []byte("[[tile]]\ntype = \"launcher\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name                  string
+		wantInbuilt, wantPath string
+		wantErr               bool
+	}{
+		{"telescope", "telescope", "", false},
+		{"deck", "deck", "", false},
+		{tomlPath, "", tomlPath, false},
+		{"no-such-layout", "", "", true},
+	} {
+		inbuilt, path, err := resolveLayout(c.name)
+		if (err != nil) != c.wantErr || inbuilt != c.wantInbuilt || path != c.wantPath {
+			t.Errorf("resolveLayout(%q) = (%q, %q, %v), want (%q, %q, err=%v)",
+				c.name, inbuilt, path, err, c.wantInbuilt, c.wantPath, c.wantErr)
+		}
+	}
+}
 
 func TestBuildInjection(t *testing.T) {
 	cases := []struct {

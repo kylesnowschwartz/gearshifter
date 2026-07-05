@@ -1,0 +1,132 @@
+package layout
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/kylesnowschwartz/gearshifter/internal/agent"
+	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/widget"
+)
+
+func writeLayout(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "layout.toml")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// The shipped example documents the default deck; this pins the two
+// together so the example can't drift from Default().
+func TestExampleLayoutReproducesDefaultDeck(t *testing.T) {
+	cmds := []catalog.Command{{Name: "review", ArgumentHint: ""}, {Name: "model"}}
+	state := agent.State{Model: "haiku", Effort: "high"}
+	got, err := Load("../../examples/layout.toml", cmds, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Default(cmds, state)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Load(examples/layout.toml) diverges from Default():\ngot  %+v\nwant %+v", got, want)
+	}
+}
+
+func TestLoadFlowsRowsFromColumnOverlap(t *testing.T) {
+	placements, err := Load(writeLayout(t, `
+[[tile]]
+type    = "button"
+command = "review"
+col     = 0
+span    = 13
+
+[[tile]]
+type    = "button"
+command = "context"
+`), nil, agent.State{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if placements[0].Y != 2 {
+		t.Errorf("first row must sit at bodyY, got %d", placements[0].Y)
+	}
+	// full-width tile (rows 2..5) + rowGap → the overlapping tile lands at 7
+	if placements[1].Y != 7 {
+		t.Errorf("overlapping tile must drop below, got y=%d, want 7", placements[1].Y)
+	}
+}
+
+func TestLoadDefaultsLabelSpanAndSlash(t *testing.T) {
+	placements, err := Load(writeLayout(t, `
+[[tile]]
+type    = "button"
+command = "/radio"
+`), nil, agent.State{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, ok := placements[0].Tile.(widget.Button)
+	if !ok {
+		t.Fatalf("want a Button, got %T", placements[0].Tile)
+	}
+	if b.Label != "RADIO" || b.Cmd.Name != "radio" || b.Span() != 4 {
+		t.Errorf("defaults: label %q cmd %q span %d, want RADIO/radio/4", b.Label, b.Cmd.Name, b.Span())
+	}
+}
+
+func TestLoadMarksGearCurrentFromState(t *testing.T) {
+	placements, err := Load(writeLayout(t, `
+[[tile]]
+type    = "gear"
+command = "model"
+values  = ["haiku", "sonnet"]
+`), nil, agent.State{Model: "claude-sonnet-5"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view := placements[0].Tile.View(false, 20); !strings.Contains(view, "▐ sonnet") {
+		t.Errorf("gear must mark the live value from state:\n%s", view)
+	}
+}
+
+// Every breakage fails with words that name the offending line (Kyle QA
+// contract: break the file on purpose — the error names the line).
+func TestLoadErrorsNameTheLine(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    string // must appear in the error
+	}{
+		{"unknown key", "[[tile]]\ntype = \"button\"\ncommand = \"x\"\nicon = \"magnifier\"", ":4: unknown key \"tile.icon\""},
+		{"syntax error", "[[tile]]\ntype = ", ":2:"},
+		{"missing type", "\n\n[[tile]]\ncommand = \"x\"", ":3: [[tile]] 1: missing type"},
+		{"unknown type", "[[tile]]\ntype = \"knob\"", `:1: [[tile]] 1: unknown type "knob"`},
+		{"missing command", "[[tile]]\ntype = \"button\"", ":1: [[tile]] 1: button needs command"},
+		{"gear without values", "[[tile]]\ntype = \"gear\"\ncommand = \"model\"", ":1: [[tile]] 1: gear needs values"},
+		{"zero span", "[[tile]]\ntype = \"button\"\ncommand = \"x\"\nspan = 0", "span 0 must be at least 1"},
+		{"col out of range", "[[tile]]\ntype = \"button\"\ncommand = \"x\"\ncol = 13", "col 13 out of range 0–12"},
+		{"grid overflow", "[[tile]]\ntype = \"button\"\ncommand = \"x\"\ncol = 10\nspan = 4", "col 10 + span 4 overflows the 13-column grid"},
+		{"second tile line", "[[tile]]\ntype = \"launcher\"\n\n[[tile]]\ntype = \"knob\"", ":4: [[tile]] 2:"},
+		{"empty file", "", "no [[tile]] entries"},
+	}
+	for _, c := range cases {
+		_, err := Load(writeLayout(t, c.content), nil, agent.State{})
+		if err == nil {
+			t.Errorf("%s: want error containing %q, got nil", c.name, c.want)
+			continue
+		}
+		if !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: error %q must contain %q", c.name, err, c.want)
+		}
+	}
+}
+
+func TestLoadMissingFile(t *testing.T) {
+	if _, err := Load(filepath.Join(t.TempDir(), "absent.toml"), nil, agent.State{}); err == nil {
+		t.Error("missing file must error")
+	}
+}

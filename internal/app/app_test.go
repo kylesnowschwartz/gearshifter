@@ -190,6 +190,25 @@ func TestDeckViewMarksCurrentGearValues(t *testing.T) {
 	}
 }
 
+func TestTinyCanvasDegradesToMessageAndInertInput(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 10})
+	m = updated.(Model)
+	content := m.View().Content
+	if !strings.Contains(content, "too small") || strings.Contains(content, "MODEL") {
+		t.Errorf("tiny canvas must show the too-small message, no tiles:\n%s", content)
+	}
+	updated, _ = m.Update(tea.MouseClickMsg{X: 3, Y: 4, Button: tea.MouseLeft})
+	m = updated.(Model)
+	if _, ok := m.Selection(); ok {
+		t.Error("clicks on a degraded canvas must be inert")
+	}
+	m = press(m, "enter")
+	if _, ok := m.Selection(); ok || m.screen != screenDeck {
+		t.Error("enter on a degraded canvas must not fire an invisible tile")
+	}
+}
+
 func TestDeckViewRendersTiles(t *testing.T) {
 	content := newTestModel().View().Content
 	for _, want := range []string{"GEARSHIFTER", "MODEL", "sonnet", "EFFORT", "max", "ALL COMMANDS…", "REVIEW", "/review", "CONTEXT", "COMPACT", "RESUME"} {

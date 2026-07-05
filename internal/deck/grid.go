@@ -66,3 +66,7 @@ func (g Grid) Cell(col, span int) (x, w int) {
 
 // Width returns the full canvas width the grid was built for.
 func (g Grid) Width() int { return g.width }
+
+// MinWidth is the narrowest canvas the grid renders legibly on: two cells
+// per column (a border needs a neighbor) plus the gutters between them.
+func MinWidth() int { return Columns*2 + (Columns-1)*Scale[0] }

@@ -1,0 +1,59 @@
+# Gearshifter deck layout — copy this file anywhere, edit, and launch:
+#
+#   just popup path/to/layout.toml        (from the repo)
+#   gearshifter pick --layout path/to/layout.toml --pane …
+#
+# The grid is fixed: 13 columns, Fibonacci (rail:main = 5:8 ≈ φ). A tile
+# declares its start column (col, 0-based) and width in columns (span);
+# rows are always computed — a tile drops below the last tile overlapping
+# its columns. Listed order = focus (tab) order.
+#
+# Archetypes and their fields (span defaults per archetype; col defaults 0;
+# label defaults to the uppercased command; a leading "/" is tolerated):
+#
+#   button    command (required), label, col, span=4
+#   gear      command + values (required), label, col, span=5
+#   launcher  col, span=13 — the full-catalog palette escape hatch
+#
+# This file reproduces the built-in default deck.
+
+[[tile]]
+type    = "gear"
+command = "model"
+values  = ["haiku", "sonnet", "opus", "fable"]
+col     = 0
+span    = 5
+
+[[tile]]
+type    = "gear"
+command = "effort"
+values  = ["low", "medium", "high", "max"]
+col     = 0
+span    = 5
+
+[[tile]]
+type    = "button"
+command = "review"
+col     = 5
+span    = 4
+
+[[tile]]
+type    = "button"
+command = "context"
+col     = 9
+span    = 4
+
+[[tile]]
+type    = "button"
+command = "compact"
+col     = 5
+span    = 4
+
+[[tile]]
+type    = "button"
+command = "resume"
+col     = 9
+span    = 4
+
+[[tile]]
+type = "launcher"

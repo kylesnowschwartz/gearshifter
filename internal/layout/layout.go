@@ -31,24 +31,44 @@ var (
 // buttonsPerRow splits the button field: 2×2 over deck.MainSpan.
 const buttonsPerRow = 2
 
+// entry pairs a tile with its start column before rows are derived.
+type entry struct {
+	tile widget.Tile
+	col  int
+}
+
+// flow derives each tile's row, skyline-style: the first row sits at
+// bodyY; a tile drops below the lowest earlier tile whose column range
+// overlaps its own, plus rowGap. Rows are never authored — the default
+// deck and layout.toml share this one algorithm (Samara's law in code).
+func flow(entries []entry) []Placement {
+	placements := make([]Placement, 0, len(entries))
+	for _, e := range entries {
+		span := e.tile.Span()
+		y := bodyY
+		for _, p := range placements {
+			overlaps := e.col < p.Col+p.Tile.Span() && p.Col < e.col+span
+			if bottom := p.Y + p.Tile.Rows() + rowGap; overlaps && bottom > y {
+				y = bottom
+			}
+		}
+		placements = append(placements, Placement{Tile: e.tile, Col: e.col, Y: y})
+	}
+	return placements
+}
+
 // Default builds the default deck: gear rail (span 5, MODEL over EFFORT)
 // beside a 2×2 button field (span 4 each) — the φ split — with the
 // launcher as a full-width bottom bar. Placement order = reading order =
 // the app's focus order. state marks each gear's live value (V7).
 func Default(commands []catalog.Command, state agent.State) []Placement {
-	var placements []Placement
-	add := func(t widget.Tile, col, y int) {
-		placements = append(placements, Placement{Tile: t, Col: col, Y: y})
-	}
-
 	model := widget.NewGear(findCommand(commands, "model"), "MODEL",
 		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan).
 		WithCurrent(state.Model)
 	effort := widget.NewGear(findCommand(commands, "effort"), "EFFORT",
 		[]string{"low", "medium", "high", "max"}, deck.RailSpan).
 		WithCurrent(state.Effort)
-	add(model, 0, bodyY)
-	add(effort, 0, bodyY+model.Rows()+rowGap)
+	entries := []entry{{model, 0}, {effort, 0}}
 
 	buttonSpan := deck.MainSpan / buttonsPerRow
 	for i, b := range []struct{ name, label string }{
@@ -58,12 +78,11 @@ func Default(commands []catalog.Command, state agent.State) []Placement {
 		{"resume", "RESUME"},
 	} {
 		btn := widget.NewButton(findCommand(commands, b.name), b.label, buttonSpan)
-		add(btn, deck.RailSpan+(i%buttonsPerRow)*buttonSpan, bodyY+(i/buttonsPerRow)*(btn.Rows()+rowGap))
+		entries = append(entries, entry{btn, deck.RailSpan + (i%buttonsPerRow)*buttonSpan})
 	}
 
-	railH := model.Rows() + rowGap + effort.Rows()
-	add(widget.NewLauncher(len(commands), deck.Columns), 0, bodyY+railH+rowGap)
-	return placements
+	entries = append(entries, entry{widget.NewLauncher(len(commands), deck.Columns), 0})
+	return flow(entries)
 }
 
 // findCommand looks a command up by name so tiles carry the real catalog

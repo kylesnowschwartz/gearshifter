@@ -44,7 +44,8 @@ Subcommands:
   pick     Open the interactive UI (run it inside tmux display-popup);
            selecting a command injects it into the target pane and
            presses Enter. --layout picks the UI: telescope (fullscreen
-           searchable palette, the default); the deck grid joins in M3.
+           searchable palette, the default), deck (the tile grid), or a
+           path to a layout.toml (see examples/layout.toml).
   list     Print the available slash commands as TSV: name, source,
            argument hint, description. Default sources are
            user,project,builtin; add plugin explicitly to include
@@ -145,12 +146,13 @@ func runPick(args []string) error {
 	pane := fs.String("pane", "", "target tmux pane id (e.g. %12); required")
 	cwd := fs.String("cwd", "", "directory for project-scoped commands; pass the target pane's cwd")
 	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
-	layoutName := fs.String("layout", defaultLayout, "UI layout to open (inbuilt: telescope, deck)")
+	layoutName := fs.String("layout", defaultLayout, "UI layout to open: telescope, deck, or a path to a layout.toml")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *layoutName != layoutTelescope && *layoutName != layoutDeck {
-		return fmt.Errorf("pick: unknown layout %q (inbuilt: %s, %s)", *layoutName, layoutTelescope, layoutDeck)
+	inbuilt, layoutPath, err := resolveLayout(*layoutName)
+	if err != nil {
+		return err
 	}
 	if os.Getenv("TMUX") == "" {
 		return fmt.Errorf("pick: must run inside tmux (use `just popup` or a keybinding)")
@@ -168,7 +170,7 @@ func runPick(args []string) error {
 		return err
 	}
 
-	pick, ok, err := runPickUI(*layoutName, cmds, client, *pane)
+	pick, ok, err := runPickUI(inbuilt, layoutPath, cmds, client, *pane)
 	if err != nil {
 		return err
 	}
@@ -178,26 +180,26 @@ func runPick(args []string) error {
 	return injectSelection(client, *pane, pick)
 }
 
+// resolveLayout classifies --layout as an inbuilt name (telescope, deck)
+// or a path to a layout.toml. Unknown values fail here, before any UI
+// opens.
+func resolveLayout(name string) (inbuilt, path string, err error) {
+	switch name {
+	case layoutTelescope, layoutDeck:
+		return name, "", nil
+	}
+	if _, statErr := os.Stat(name); statErr != nil {
+		return "", "", fmt.Errorf("pick: unknown layout %q — not an inbuilt (%s, %s) and not a readable layout.toml path",
+			name, layoutTelescope, layoutDeck)
+	}
+	return "", name, nil
+}
+
 // runPickUI runs the chosen layout's Bubble Tea program and reports the
 // user's selection; ok is false when they cancelled.
-func runPickUI(layoutName string, cmds []catalog.Command, client *tmux.Client, pane string) (selection, bool, error) {
-	switch layoutName {
-	case layoutDeck:
-		home, _ := os.UserHomeDir()
-		// Session-specific model when the pane's Claude session is
-		// resolvable; global settings otherwise (V7/P3.5, M3-DECK.md).
-		var provider agent.Provider = claude.New(home)
-		panePID, _ := client.PanePID(pane)
-		paneCwd, _ := client.PaneCwd(pane)
-		state := provider.State(panePID, paneCwd)
-		final, err := tea.NewProgram(app.New(cmds, layout.Default(cmds, state))).Run()
-		if err != nil {
-			return selection{}, false, fmt.Errorf("pick: %w", err)
-		}
-		model := final.(app.Model)
-		sel, ok := model.Selection()
-		return selection{cmd: sel, arg: model.Arg(), insertOnly: model.InsertOnly()}, ok, nil
-	default: // telescope
+func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, client *tmux.Client, pane string) (selection, bool, error) {
+	switch inbuilt {
+	case layoutTelescope:
 		final, err := tea.NewProgram(palette.New(cmds)).Run()
 		if err != nil {
 			return selection{}, false, fmt.Errorf("pick: %w", err)
@@ -205,6 +207,32 @@ func runPickUI(layoutName string, cmds []catalog.Command, client *tmux.Client, p
 		model := final.(palette.Model)
 		sel, ok := model.Selection()
 		return selection{cmd: sel, insertOnly: model.InsertOnly()}, ok, nil
+	default: // deck, inbuilt or from a layout.toml — both consume placements
+		home, _ := os.UserHomeDir()
+		// Session-specific model when the pane's Claude session is
+		// resolvable; global settings otherwise (V7/P3.5, M3-DECK.md).
+		var provider agent.Provider = claude.New(home)
+		panePID, _ := client.PanePID(pane)
+		paneCwd, _ := client.PaneCwd(pane)
+		state := provider.State(panePID, paneCwd)
+		placements := layout.Default(cmds, state)
+		if layoutPath != "" {
+			var err error
+			placements, err = layout.Load(layoutPath, cmds, state)
+			if err != nil {
+				// Popup stderr is invisible; a broken layout must fail
+				// with words in the tmux status line (M2 lesson).
+				_ = client.DisplayMessage("gearshifter: " + err.Error())
+				return selection{}, false, fmt.Errorf("pick: %w", err)
+			}
+		}
+		final, err := tea.NewProgram(app.New(cmds, placements)).Run()
+		if err != nil {
+			return selection{}, false, fmt.Errorf("pick: %w", err)
+		}
+		model := final.(app.Model)
+		sel, ok := model.Selection()
+		return selection{cmd: sel, arg: model.Arg(), insertOnly: model.InsertOnly()}, ok, nil
 	}
 }
 
