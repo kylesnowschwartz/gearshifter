@@ -54,11 +54,14 @@ Sources of truth (all in `.agent-history/`, git-ignored, disk-only):
 
 ## State / next steps
 
-M0–M3 shipped; **M4 polish is next**. The deck is the default UI
-(`just popup`, `prefix+C-g` via `bind-dev`); telescope stays one flag away.
-Dev loop: `just check` after every substantive change; `just qa-rig`
-(popup rig, 12 assertions incl. deck click end-to-end) before merging
-UI work.
+M0–M4 shipped; **M5 aesthetic is next**; distribution is parked as M6
+until someone besides Kyle wants an install. The deck is the default UI;
+a `run-shell .../gearshifter.tmux` line in tmux.conf owns the permanent
+`prefix+C-g` binding (`just bind-dev` sources the same file for dev);
+`@gearshifter-layout/width/height` are honored at keypress time;
+telescope stays one flag away. Dev loop: `just check` after every
+substantive change; `just qa-rig` (popup rig, 14 assertions incl. deck
+click + plugin binding end-to-end) before merging UI work.
 
 Done foundations (2026-07-04): M0 injection spike (recipe above); product
 spec v1; interview settled D1–D4; architecture draft; prior-art survey
@@ -117,13 +120,23 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    message. **Deck is the binary default**; telescope = `--layout
    telescope`, never delete it. Post-review refactor (e319781): app
    records selection / main injects; `layout` is the only bridge package.
-5. **M4 polish (next):** TPM bootstrap, goreleaser, CI, bump/release
-   recipes; parked here: opt-in per-session effort shim (hook/statusline),
-   public session-state package extraction behind `agent.Provider`,
-   tmux @options (`internal/config`) incl. custom layout path for
-   keybindings → **M5 aesthetic** (house palette DMG vs PICO-8 — mocks
-   favor PICO-8 — clawd mascot sprite, wordmark grid-break treatment,
-   themes/animation).
+5. **M4 local fit: DONE (2026-07-05, M4-LOCAL-FIT.md).** Re-scoped with
+   Kyle after M3: the M3 deliverable is a complete local MVP, so the old
+   distribution-flavored M4 was premature. Shipped: `gearshifter.tmux`
+   entry point (a tmux.conf `run-shell` line installs the binding
+   permanently; `just bind-dev` sources the same file; builds the binary
+   on first run when `go` exists) + `scripts/open-popup.sh` reading
+   `@gearshifter-layout`/`-width`/`-height` at KEYPRESS time
+   (`@gearshifter-key` at bind time); qa-rig step 11 drives prefix+C-g
+   end-to-end. `internal/config` stays unbuilt — the shell seam covers
+   @options until Go needs them.
+6. **M5 aesthetic (next):** house palette (DMG vs PICO-8 — mocks favor
+   PICO-8), clawd mascot sprite, wordmark grid-break treatment,
+   themes/animation.
+7. **M6 distribution (parked until an external user exists):** TPM
+   bootstrap, goreleaser, CI, bump/release recipes; also parked: opt-in
+   per-session effort shim (hook/statusline), public session-state
+   package extraction behind `agent.Provider`.
 
 Open items:
 

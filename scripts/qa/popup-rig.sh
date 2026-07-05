@@ -147,6 +147,18 @@ sleep 1
 after=$(origin_screen | tail -1)
 [ "$before" = "$after" ] && ok "deck esc no side effects" || bad "deck esc no side effects"
 
+echo "11. plugin entry point binds the key; prefix+C-g opens the deck"
+# The rig's popup height default (75%) is honored via open-popup.sh, so
+# oversize it for the small rig client the same way open_deck does.
+tmux -L "$SOCK" set -g @gearshifter-height 90%
+tmux -L "$SOCK" run-shell "$PWD/gearshifter.tmux"
+tmux -L "$SOCK" list-keys | rg -q 'C-g.*open-popup' && ok "plugin binds C-g" || bad "plugin binds C-g"
+send_host C-b C-g # send-keys writes to the host pane's tty, so C-b reaches the inner server as its prefix
+sleep 1.5
+host_screen | rg -q 'GEARSHIFTER' && ok "prefix+C-g opens the deck" || bad "prefix+C-g opens the deck"
+send_host Escape
+sleep 0.5
+
 echo
 echo "popup-rig: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
