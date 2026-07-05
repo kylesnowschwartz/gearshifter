@@ -21,7 +21,7 @@ ls cwd=invocation_directory(): build
 # {{theme}}: color theme (default, plain)
 # NOTE: display-popup does NOT format-expand its shell command (verified tmux 3.6a) — resolve pane/cwd BEFORE opening the popup
 # WARNING (V6): never launch this from a Claude `!` command — injection races the !-completion input flush and is silently discarded (M2-PALETTE.md)
-# -h 75%: the stacked gear rail needs ~20 inner rows
+# -h 85%: the 4×4 button field needs ~24 inner rows
 # Open the gearshifter deck in a tmux popup; firing a tile injects its command into the pane the popup was launched from
 popup layout="deck" theme="default": build
     #!/usr/bin/env bash
@@ -30,7 +30,7 @@ popup layout="deck" theme="default": build
     # `)` in case patterns within command substitution).
     set -euo pipefail
     case '{{layout}}' in deck|telescope) layout='{{layout}}' ;; *) layout="$(realpath '{{layout}}')" ;; esac
-    tmux display-popup -E -w 70% -h 75% "{{justfile_directory()}}/bin/gearshifter pick --layout \"$layout\" --theme '{{theme}}' --pane \"$TMUX_PANE\" --cwd '{{invocation_directory()}}'"
+    tmux display-popup -E -w 70% -h 85% "{{justfile_directory()}}/bin/gearshifter pick --layout \"$layout\" --theme '{{theme}}' --pane \"$TMUX_PANE\" --cwd '{{invocation_directory()}}'"
 
 # Open the M2 telescope palette (fullscreen searchable list) in a tmux popup — the pre-deck UI, still the binary default until P5
 popup-telescope: build

@@ -29,8 +29,10 @@ var (
 	rowGap = deck.Scale[0]
 )
 
-// buttonsPerRow splits the button field: 2×2 over deck.MainSpan.
-const buttonsPerRow = 2
+// buttonsPerRow splits the button field: 4 across over deck.MainSpan
+// (8 = 4 × span-2, the main field's even split). Flipped from 2 on
+// 2026-07-05 after Kyle QA'd the dense demo (examples/dense.toml).
+const buttonsPerRow = 4
 
 // entry pairs a tile with its start column before rows are derived.
 type entry struct {
@@ -59,11 +61,13 @@ func flow(entries []entry) []Placement {
 }
 
 // Default builds the default deck: gear rail (span 5, MODEL over EFFORT)
-// beside a 2×3 button field (span 4 each) — the φ split — with the
-// launcher as a full-width bottom bar. Buttons are the data-ranked
-// generic built-ins from Kyle's real usage history (DECK-CONTENT.md,
-// 2026-07-05). Placement order = reading order = the app's focus order.
-// state marks each gear's live value (V7); st styles every tile.
+// beside a 4×4 button field (span 2 each) — the φ split — with the
+// launcher as a full-width bottom bar. Buttons are generic built-ins:
+// the data-ranked six-pack (DECK-CONTENT.md, 2026-07-05) leads in
+// reading order, the rest fill the dense field (flipped from 2×3 the
+// same day, Kyle's call after the dense demo). Placement order =
+// reading order = the app's focus order. state marks each gear's live
+// value (V7); st styles every tile.
 func Default(commands []catalog.Command, state agent.State, st *theme.Styles) []Placement {
 	model := widget.NewGear(st, findCommand(commands, "model"), "MODEL",
 		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan).
@@ -81,6 +85,16 @@ func Default(commands []catalog.Command, state agent.State, st *theme.Styles) []
 		{"context", "CONTEXT"},
 		{"resume", "RESUME"},
 		{"config", "CONFIG"},
+		{"agents", "AGENTS"},
+		{"memory", "MEMORY"},
+		{"cost", "COST"},
+		{"doctor", "DOCTOR"},
+		{"export", "EXPORT"},
+		{"statusline", "STATUS"},
+		{"hooks", "HOOKS"},
+		{"mcp", "MCP"},
+		{"permissions", "PERMS"},
+		{"reload-plugins", "RELOAD"},
 	} {
 		btn := widget.NewButton(st, findCommand(commands, b.name), b.label, buttonSpan)
 		entries = append(entries, entry{btn, deck.RailSpan + (i%buttonsPerRow)*buttonSpan})

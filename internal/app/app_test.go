@@ -30,7 +30,7 @@ func newTestModel() Model {
 	// expectations simple.
 	cmds := testCommands()
 	m := New(cmds, layout.Default(cmds, agent.State{Model: "haiku", Effort: "low"}, testStyles), testStyles)
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 20})
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 26})
 	return updated.(Model)
 }
 
@@ -51,8 +51,10 @@ func press(m Model, keys ...string) Model {
 	return m
 }
 
-// Focus order: 0 MODEL, 1 EFFORT, 2 COMPACT, 3 COPY, 4 CLEAR,
-// 5 CONTEXT, 6 RESUME, 7 CONFIG, 8 launcher.
+// Focus order (4×4 default): 0 MODEL, 1 EFFORT, 2 COMPACT, 3 COPY,
+// 4 CLEAR, 5 CONTEXT, 6 RESUME, 7 CONFIG, 8 AGENTS, 9 MEMORY, 10 COST,
+// 11 DOCTOR, 12 EXPORT, 13 STATUS, 14 HOOKS, 15 MCP, 16 PERMS,
+// 17 RELOAD, 18 launcher.
 
 func TestFocusWalksAndEnterFires(t *testing.T) {
 	m := press(newTestModel(), "l", "l", "enter") // MODEL → EFFORT → COMPACT
@@ -263,7 +265,7 @@ func TestTinyCanvasDegradesToMessageAndInertInput(t *testing.T) {
 
 func TestEmptyDeckNeverPanics(t *testing.T) {
 	m := New(nil, nil, testStyles) // no placements: inert but alive, quit keys work
-	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 20})
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 26})
 	m = updated.(Model)
 	m = press(m, "l", "j", "enter")
 	updated, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
@@ -275,7 +277,9 @@ func TestEmptyDeckNeverPanics(t *testing.T) {
 
 func TestDeckViewRendersTiles(t *testing.T) {
 	content := newTestModel().View().Content
-	for _, want := range []string{"GEARSHIFTER", "MODEL", "sonnet", "EFFORT", "max", "ALL COMMANDS…", "COMPACT", "/compact", "COPY", "CLEAR", "CONTEXT", "RESUME", "CONFIG"} {
+	// "/copy" not "/compact": at the 82-cell test canvas a span-2 tile's
+	// inner is ~9 cells, so longer nameplates truncate by design.
+	for _, want := range []string{"GEARSHIFTER", "MODEL", "sonnet", "EFFORT", "max", "ALL COMMANDS…", "COMPACT", "/copy", "COPY", "CLEAR", "CONTEXT", "RESUME", "CONFIG", "PERMS", "RELOAD"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("deck view missing %q", want)
 		}

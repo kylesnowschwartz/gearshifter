@@ -5,7 +5,7 @@
 #   @gearshifter-layout   deck | telescope | /abs/path/layout.toml  (default: deck)
 #   @gearshifter-theme    default | plain                           (default: default)
 #   @gearshifter-width    popup width                               (default: 70%)
-#   @gearshifter-height   popup height                              (default: 75% — the deck needs ~21 rows)
+#   @gearshifter-height   popup height                              (default: 85% — the 4×4 deck needs ~24 rows)
 #
 # WARNING (V6): never trigger this from a Claude `!` command — injection
 # races the !-completion input flush and is silently discarded.
@@ -22,5 +22,5 @@ opt() {
 }
 
 exec tmux display-popup -E \
-  -w "$(opt @gearshifter-width 70%)" -h "$(opt @gearshifter-height 75%)" \
+  -w "$(opt @gearshifter-width 70%)" -h "$(opt @gearshifter-height 85%)" \
   "\"$ROOT/bin/gearshifter\" pick --layout \"$(opt @gearshifter-layout deck)\" --theme \"$(opt @gearshifter-theme default)\" --pane \"$pane\" --cwd \"$cwd\""

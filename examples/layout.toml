@@ -11,14 +11,16 @@
 # Archetypes and their fields (span defaults per archetype; col defaults 0;
 # label defaults to the uppercased command; a leading "/" is tolerated):
 #
-#   button    command (required), label, col, span=4,
+#   button    command (required), label, col, span=2,
 #             insert=false (true: insert "/cmd " without pressing Enter —
 #             for commands that always want an argument typed)
 #   gear      command + values (required), label, col, span=5
 #   launcher  col, span=13 — the full-catalog palette escape hatch
 #
-# This file reproduces the built-in default deck (buttons are the
-# data-ranked generic built-ins — DECK-CONTENT.md).
+# This file reproduces the built-in default deck: a 4×4 button field of
+# generic built-ins (four span-2 columns — the main span's even split;
+# flipped from 2×3 on 2026-07-05), the data-ranked six-pack leading in
+# reading order (DECK-CONTENT.md).
 
 [[tile]]
 type    = "gear"
@@ -38,37 +40,100 @@ span    = 5
 type    = "button"
 command = "compact"
 col     = 5
-span    = 4
+span    = 2
 
 [[tile]]
 type    = "button"
 command = "copy"
-col     = 9
-span    = 4
+col     = 7
+span    = 2
 
 [[tile]]
 type    = "button"
 command = "clear"
-col     = 5
-span    = 4
+col     = 9
+span    = 2
 
 [[tile]]
 type    = "button"
 command = "context"
-col     = 9
-span    = 4
+col     = 11
+span    = 2
 
 [[tile]]
 type    = "button"
 command = "resume"
 col     = 5
-span    = 4
+span    = 2
 
 [[tile]]
 type    = "button"
 command = "config"
+col     = 7
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "agents"
 col     = 9
-span    = 4
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "memory"
+col     = 11
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "cost"
+col     = 5
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "doctor"
+col     = 7
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "export"
+col     = 9
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "statusline"
+label   = "STATUS"
+col     = 11
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "hooks"
+col     = 5
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "mcp"
+col     = 7
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "permissions"
+label   = "PERMS"
+col     = 9
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "reload-plugins"
+label   = "RELOAD"
+col     = 11
+span    = 2
 
 [[tile]]
 type = "launcher"

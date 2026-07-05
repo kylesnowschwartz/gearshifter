@@ -15,7 +15,9 @@ var testStyles = theme.Plain()
 
 func TestDefaultPlacementOrderIsReadingOrder(t *testing.T) {
 	placements := Default(nil, agent.State{}, testStyles)
-	want := []string{"MODEL", "EFFORT", "COMPACT", "COPY", "CLEAR", "CONTEXT", "RESUME", "CONFIG"}
+	want := []string{"MODEL", "EFFORT", "COMPACT", "COPY", "CLEAR", "CONTEXT",
+		"RESUME", "CONFIG", "AGENTS", "MEMORY", "COST", "DOCTOR", "EXPORT",
+		"STATUS", "HOOKS", "MCP", "PERMS", "RELOAD"}
 	if len(placements) != len(want)+1 {
 		t.Fatalf("Default yields %d placements, want %d", len(placements), len(want)+1)
 	}

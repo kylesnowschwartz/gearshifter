@@ -74,8 +74,10 @@ command = "/radio"
 	if !ok {
 		t.Fatalf("want a Button, got %T", placements[0].Tile)
 	}
-	if b.Label != "RADIO" || b.Cmd.Name != "radio" || b.Span() != 4 {
-		t.Errorf("defaults: label %q cmd %q span %d, want RADIO/radio/4", b.Label, b.Cmd.Name, b.Span())
+	// span default = deck.MainSpan/buttonsPerRow: 2 since the 4-column
+	// flip (2026-07-05). Layouts wanting the old wide tiles say span = 4.
+	if b.Label != "RADIO" || b.Cmd.Name != "radio" || b.Span() != 2 {
+		t.Errorf("defaults: label %q cmd %q span %d, want RADIO/radio/2", b.Label, b.Cmd.Name, b.Span())
 	}
 }
 
