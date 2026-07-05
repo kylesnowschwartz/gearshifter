@@ -84,6 +84,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		}
+	case tea.MouseMotionMsg:
+		// Hover: the cursor follows the pointer over list rows (deck
+		// parity); off-list motion changes nothing, and an unchanged
+		// model renders an identical frame, so the motion flood is free.
+		if row := m.offset + msg.Y - 1; msg.Y >= 1 && row < len(m.visible) {
+			m.cursor = row
+		}
 	case tea.MouseWheelMsg:
 		switch msg.Button {
 		case tea.MouseWheelDown:
@@ -167,7 +174,10 @@ func (m Model) View() tea.View {
 	fmt.Fprintf(&b, "%d/%d · enter run · tab insert · esc cancel", len(m.visible), len(m.commands))
 	v := tea.NewView(b.String())
 	v.AltScreen = true
-	v.MouseMode = tea.MouseModeCellMotion
+	// AllMotion (SGR 1003) for hover: the cursor follows the pointer
+	// (deck hover parity — spiked 2026-07-05, tmux forwards bare motion
+	// into display-popup with popup-local coords).
+	v.MouseMode = tea.MouseModeAllMotion
 	m.styles.ApplySurface(&v)
 	return v
 }

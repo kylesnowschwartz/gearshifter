@@ -158,3 +158,23 @@ func TestBackspaceRefilters(t *testing.T) {
 		t.Errorf("backspace: query %q visible %d, want ctx with matches", m.query, len(m.visible))
 	}
 }
+
+// Hover parity with the deck (spike QA feedback 2026-07-05): bare
+// motion moves the cursor; off-list motion is a no-op.
+func TestHoverMovesCursor(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.MouseMotionMsg{X: 2, Y: 3})
+	m = updated.(Model)
+	if m.cursor != 2 {
+		t.Errorf("hover y=3: cursor = %d, want 2", m.cursor)
+	}
+	for _, y := range []int{0, len(testCommands()) + 1} {
+		updated, _ := m.Update(tea.MouseMotionMsg{X: 2, Y: y})
+		if c := updated.(Model).cursor; c != 2 {
+			t.Errorf("hover at y=%d must not move the cursor, got %d", y, c)
+		}
+	}
+	if v := m.View(); v.MouseMode != tea.MouseModeAllMotion {
+		t.Error("palette must request AllMotion — hover needs bare-motion events")
+	}
+}

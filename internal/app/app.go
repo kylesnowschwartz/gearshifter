@@ -569,14 +569,17 @@ const flowBodyY = 1
 // flowLayers packs chips left-to-right by natural width, wrapping at
 // the canvas edge (STRIP-EMBED step 2). Order = placement order; an
 // over-wide tile (an expanded gear on a narrow pane) truncates in place
-// rather than overflowing the hit-test bounds.
+// rather than overflowing the hit-test bounds. Gear chips own their
+// row: expanding one must never reflow the chips around it (Kyle's
+// spike QA — the in-place unfold was moving the whole field).
 func (m Model) flowLayers() ([]*lipgloss.Layer, int) {
 	maxX := m.width - marginX
 	x, y := marginX, flowBodyY
 	layers := make([]*lipgloss.Layer, 0, len(m.order))
 	for i, p := range m.order {
+		_, ownRow := p.Tile.(widget.GearChip)
 		w := flowWidth(p.Tile, maxX-marginX)
-		if x > marginX && x+w > maxX {
+		if x > marginX && (ownRow || x+w > maxX) {
 			x, y = marginX, y+1
 		}
 		if w > maxX-x {
@@ -585,7 +588,11 @@ func (m Model) flowLayers() ([]*lipgloss.Layer, int) {
 		rs := widget.RenderState{Focused: i == m.focus, Armed: m.armed && i == m.focus}
 		layers = append(layers, lipgloss.NewLayer(p.Tile.View(rs, w)).
 			ID("tile:"+strconv.Itoa(i)).X(x).Y(y).Z(1))
-		x += w + 1
+		if ownRow {
+			x, y = marginX, y+1
+		} else {
+			x += w + 1
+		}
 	}
 	return layers, y + 1
 }

@@ -554,3 +554,25 @@ func TestCompactRefreshRemarksGearChips(t *testing.T) {
 		t.Errorf("a refresh must re-mark the gear chip badge:\n%s", m.View().Content)
 	}
 }
+
+// Expanding a gear chip must not move any other chip: gears own their
+// row (spike QA feedback — the in-place unfold was reflowing the field).
+func TestCompactGearExpansionNeverReflowsChips(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+	before := strings.Split(m.View().Content, "\n")
+	updated, _ := m.Update(tea.MouseClickMsg{X: 2, Y: 1, Button: tea.MouseLeft}) // expand MODEL
+	m = updated.(Model)
+	after := strings.Split(m.View().Content, "\n")
+	if len(before) != len(after) {
+		t.Fatalf("expansion changed the row count: %d → %d", len(before), len(after))
+	}
+	for i := range before {
+		if i == 1 {
+			continue // MODEL's own row is the one allowed to change
+		}
+		if before[i] != after[i] {
+			t.Errorf("row %d moved on expansion:\nbefore %q\nafter  %q", i, before[i], after[i])
+		}
+	}
+}
