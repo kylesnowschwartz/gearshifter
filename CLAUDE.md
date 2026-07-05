@@ -60,6 +60,29 @@ Sources of truth (all in `.agent-history/`, git-ignored, disk-only):
   `plain` (colorless; behavior-freeze + reduced-decoration path), via
   `--theme` / `@gearshifter-theme`.
 
+## Shared library (agent-ouija)
+
+Claude session-state mechanics (registry/pane resolution, transcript tail
+scan, path encoding, settings decode) come from
+`github.com/kylesnowschwartz/agent-ouija` (repo:
+`~/Code/my-projects/agent-ouija`), confined to `internal/agent/claude`.
+
+**Staying current**: pin tagged versions only
+(`go get github.com/kylesnowschwartz/agent-ouija@vX.Y.Z && go mod tidy`,
+read its CHANGELOG first — breaking changes bump the library minor).
+After any bump: `just check` and `just qa-rig`. For cross-repo dev use a
+git-ignored `go.work`; any commit finalizing a bump must pass
+`GOWORK=off go build ./... && go test ./...`.
+
+**The line (one-way dependency)**: agent-ouija reads Claude Code state
+and returns data; gearshifter decides what it means. The
+settings-vs-transcript **mtime arbitration** and all gear/deck/tmux
+policy stay here — never propose moving them into the library, and never
+add gearshifter-specific types to the library. Format drift and parsing
+defects are ALWAYS fixed in agent-ouija (with a fixture), never worked
+around here. The `agent.Provider` seam stays: `agent/claude` is the only
+package importing agent-ouija.
+
 ## State / next steps
 
 M0–M4 shipped, deck content settled from real usage data
@@ -149,8 +172,9 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    themes/animation.
 7. **M6 distribution (parked until an external user exists):** TPM
    bootstrap, goreleaser, CI, bump/release recipes; also parked: opt-in
-   per-session effort shim (hook/statusline), public session-state
-   package extraction behind `agent.Provider`.
+   per-session effort shim (hook/statusline). The session-state package
+   extraction formerly parked here SHIPPED as the shared agent-ouija
+   library (2026-07-05) — see "Shared library" below.
 
 Open items:
 
