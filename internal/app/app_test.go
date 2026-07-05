@@ -287,10 +287,31 @@ type firedCall struct {
 }
 
 func persistentModel(fired *[]firedCall) Model {
-	return newTestModel().Persistent(func(cmd catalog.Command, arg string, insertOnly bool) error {
-		*fired = append(*fired, firedCall{cmd.Name, arg, insertOnly})
-		return nil
-	}, nil)
+	return newTestModel().Persistent(PersistentHooks{
+		Inject: func(cmd catalog.Command, arg string, insertOnly bool) error {
+			*fired = append(*fired, firedCall{cmd.Name, arg, insertOnly})
+			return nil
+		},
+	})
+}
+
+// completeFire ends the press frame and runs the returned inject
+// command by hand (tests have no Bubble Tea runner), feeding its notice
+// back into the model — asserting along the way that the fire never
+// quits the program.
+func completeFire(t *testing.T, m Model) Model {
+	t.Helper()
+	updated, cmd := m.Update(pressFrameDoneMsg{})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("a persistent fire must return the inject command")
+	}
+	msg := cmd()
+	if _, quit := msg.(tea.QuitMsg); quit {
+		t.Fatal("a persistent fire must not quit")
+	}
+	updated, _ = m.Update(msg)
+	return updated.(Model)
 }
 
 func TestPersistentFireDeliversAndStaysAlive(t *testing.T) {
@@ -298,11 +319,7 @@ func TestPersistentFireDeliversAndStaysAlive(t *testing.T) {
 	m := persistentModel(&fired)
 
 	m = press(m, "l", "l", "enter") // fire COMPACT, armed
-	updated, cmd := m.Update(pressFrameDoneMsg{})
-	m = updated.(Model)
-	if cmd != nil {
-		t.Error("persistent press frame must not quit")
-	}
+	m = completeFire(t, m)
 	if len(fired) != 1 || fired[0].name != "compact" {
 		t.Fatalf("fired = %+v, want one compact delivery", fired)
 	}
@@ -313,10 +330,10 @@ func TestPersistentFireDeliversAndStaysAlive(t *testing.T) {
 		t.Error("the footer must confirm the fire")
 	}
 
-	// The strip outlives the fire: a second tile fires again.
+	// The strip outlives the fire: a second tile fires again, and the
+	// fresh input retires the previous notice.
 	m = press(m, "l", "enter") // COPY
-	updated, _ = m.Update(pressFrameDoneMsg{})
-	m = updated.(Model)
+	m = completeFire(t, m)
 	if len(fired) != 2 || fired[1].name != "copy" {
 		t.Errorf("second fire = %+v, want copy appended", fired)
 	}
@@ -325,20 +342,48 @@ func TestPersistentFireDeliversAndStaysAlive(t *testing.T) {
 func TestPersistentGearFireCarriesValue(t *testing.T) {
 	var fired []firedCall
 	m := press(persistentModel(&fired), "j", "enter") // MODEL: haiku → sonnet
-	updated, _ := m.Update(pressFrameDoneMsg{})
-	_ = updated.(Model)
+	completeFire(t, m)
 	if len(fired) != 1 || fired[0].name != "model" || fired[0].arg != "sonnet" {
 		t.Errorf("gear fire = %+v, want model/sonnet", fired)
 	}
 }
 
-func TestPersistentInjectErrorLandsInFooter(t *testing.T) {
-	m := newTestModel().Persistent(func(catalog.Command, string, bool) error {
-		return fmt.Errorf("no Claude pane in this window")
-	}, nil)
-	m = press(m, "l", "l", "enter")
-	updated, _ := m.Update(pressFrameDoneMsg{})
+// Quit keys during the armed frame abort the fire WITHOUT killing the
+// strip (a misclick must never cost the whole widget); unarmed q still
+// quits deliberately.
+func TestPersistentArmedAbortStaysAlive(t *testing.T) {
+	var fired []firedCall
+	m := press(persistentModel(&fired), "l", "l", "enter") // armed on COMPACT
+	updated, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
 	m = updated.(Model)
+	if cmd != nil {
+		t.Error("armed abort must not quit the strip")
+	}
+	if m.armed {
+		t.Error("abort must disarm")
+	}
+	if _, ok := m.Selection(); ok {
+		t.Error("abort must clear the selection")
+	}
+	// A late press-frame tick after the abort is a no-op fire.
+	updated, _ = m.Update(pressFrameDoneMsg{})
+	m = updated.(Model)
+	if len(fired) != 0 {
+		t.Errorf("aborted fire must not inject, got %+v", fired)
+	}
+	if _, cmd = m.Update(tea.KeyPressMsg(tea.Key{Code: 'q', Text: "q"})); cmd == nil {
+		t.Error("unarmed q must still quit the strip")
+	}
+}
+
+func TestPersistentInjectErrorLandsInFooter(t *testing.T) {
+	m := newTestModel().Persistent(PersistentHooks{
+		Inject: func(catalog.Command, string, bool) error {
+			return fmt.Errorf("no Claude pane in this window")
+		},
+	})
+	m = press(m, "l", "l", "enter")
+	m = completeFire(t, m)
 	if !strings.Contains(m.View().Content, "no Claude pane in this window") {
 		t.Error("an inject failure must fail with words in the footer")
 	}
@@ -346,9 +391,18 @@ func TestPersistentInjectErrorLandsInFooter(t *testing.T) {
 
 func TestPersistentPaletteSelectionDeliversAndReturnsToDeck(t *testing.T) {
 	var fired []firedCall
-	m := press(persistentModel(&fired), "/", "c", "t", "x", "enter")
+	m := press(persistentModel(&fired), "/", "c", "t", "x")
+	updated, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	m = updated.(Model)
 	if m.screen != screenDeck {
 		t.Error("palette delivery must land back on the deck")
+	}
+	if cmd == nil {
+		t.Fatal("palette delivery must return the inject command")
+	}
+	msg := cmd()
+	if _, quit := msg.(tea.QuitMsg); quit {
+		t.Fatal("palette delivery must not quit")
 	}
 	if len(fired) != 1 || fired[0].name != "context" {
 		t.Errorf("palette fire = %+v, want context", fired)
@@ -359,9 +413,12 @@ func TestPersistentPaletteSelectionDeliversAndReturnsToDeck(t *testing.T) {
 }
 
 func TestPersistentRefreshRemarksGears(t *testing.T) {
-	m := newTestModel().Persistent(
-		func(catalog.Command, string, bool) error { return nil },
-		func() map[string]string { return nil })
+	seed := map[string]string{"model": "haiku", "effort": "low"} // = newTestModel's state
+	m := newTestModel().Persistent(PersistentHooks{
+		Inject:  func(catalog.Command, string, bool) error { return nil },
+		Refresh: func() map[string]string { return nil },
+		Seed:    seed,
+	})
 	if m.Init() == nil {
 		t.Fatal("persistent mode must schedule the refresh tick")
 	}
@@ -369,24 +426,29 @@ func TestPersistentRefreshRemarksGears(t *testing.T) {
 		t.Fatal("popup mode must not tick")
 	}
 
-	updated, cmd := m.Update(stateRefreshMsg{"model": "opus", "effort": "high"})
+	// The FIRST poll matching the startup seed is a per-gear no-op — it
+	// must not snap a mid-navigation cursor (review finding: unseeded
+	// lastSettings made the first tick re-mark every gear).
+	m = press(m, "j") // MODEL cursor: haiku → sonnet
+	before := m.View().Content
+	updated, cmd := m.Update(stateRefreshMsg{"model": "haiku", "effort": "low"})
 	m = updated.(Model)
 	if cmd == nil {
 		t.Error("a refresh must schedule the next tick")
 	}
-	content := m.View().Content
-	if !strings.Contains(content, "▐ opus") || !strings.Contains(content, "▐ high") {
-		t.Errorf("refresh must re-mark the gears:\n%s", content)
+	if m.View().Content != before {
+		t.Error("a poll matching the seed must not touch the deck")
 	}
 
-	// An unchanged poll is a no-op: it must not snap a mid-navigation
-	// gear cursor back to current (idle ticks fire every few seconds).
-	m = press(m, "j") // move MODEL's cursor off the current value
-	before := m.View().Content
-	updated, _ = m.Update(stateRefreshMsg{"model": "opus", "effort": "high"})
+	// A changed value re-marks its own gear only.
+	updated, _ = m.Update(stateRefreshMsg{"model": "haiku", "effort": "high"})
 	m = updated.(Model)
-	if m.View().Content != before {
-		t.Error("an unchanged refresh must not touch the deck")
+	content := m.View().Content
+	if !strings.Contains(content, "▐ high") {
+		t.Errorf("refresh must re-mark the changed gear:\n%s", content)
+	}
+	if !strings.Contains(content, "▐ haiku") {
+		t.Error("the unchanged gear must keep its current marker")
 	}
 }
 

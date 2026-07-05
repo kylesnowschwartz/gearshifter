@@ -114,11 +114,22 @@ func TestWindowPanes(t *testing.T) {
 	}
 }
 
-func TestWindowPanesBadRowsError(t *testing.T) {
-	if _, err := NewClient(&cannedRunner{out: "%0\tnot-a-pid\t/x"}).WindowPanes("%0"); err == nil {
-		t.Error("garbage pid must error")
+// Malformed rows are skipped, never fatal. The realistic case: a pane
+// with an unresolvable cwd expands #{pane_current_path} to empty, and
+// when it sorts LAST the ExecRunner's TrimSpace eats its trailing tab,
+// leaving a 2-field row — the scan must still return the healthy panes.
+func TestWindowPanesSkipsMalformedRows(t *testing.T) {
+	r := &cannedRunner{out: "%0\t100\t/home/a\n%3\t99"} // "%3\t99\t" post-trim
+	panes, err := NewClient(r).WindowPanes("%0")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, err := NewClient(&cannedRunner{out: "one-field-only"}).WindowPanes("%0"); err == nil {
-		t.Error("short row must error")
+	want := []Pane{{ID: "%0", PID: 100, Cwd: "/home/a"}}
+	if !reflect.DeepEqual(panes, want) {
+		t.Errorf("WindowPanes = %+v, want the healthy row only", panes)
+	}
+	panes, err = NewClient(&cannedRunner{out: "%0\tnot-a-pid\t/x\n%1\t11\t/y"}).WindowPanes("%0")
+	if err != nil || len(panes) != 1 || panes[0].ID != "%1" {
+		t.Errorf("garbage pid row must be skipped, got %+v, %v", panes, err)
 	}
 }

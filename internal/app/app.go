@@ -7,7 +7,6 @@ package app
 
 import (
 	"fmt"
-	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -51,6 +50,26 @@ const stateRefreshInterval = 5 * time.Second
 // live value, layout.GearSettings shape) back into the update loop.
 type stateRefreshMsg map[string]string
 
+// noticeMsg carries an injection result (confirmation or error text)
+// back from the off-loop inject command into the footer.
+type noticeMsg string
+
+// PersistentHooks is everything strip mode wires into the app — one
+// semantic bundle so "is this a strip?" is one question (Inject != nil),
+// never two drifting nil checks.
+type PersistentHooks struct {
+	// Inject delivers a fired selection to the target pane. Runs inside
+	// a tea command, off the update loop — it may block on tmux.
+	Inject func(cmd catalog.Command, arg string, insertOnly bool) error
+	// Refresh polls live gear settings every stateRefreshInterval; also
+	// off-loop. Nil disables the tick.
+	Refresh func() map[string]string
+	// Seed is the startup gear-settings snapshot — the placements were
+	// built from it, so the first poll that matches it is a no-op
+	// instead of a cursor-snapping re-mark.
+	Seed map[string]string
+}
+
 // Model routes between the deck screen and the embedded palette.
 type Model struct {
 	commands []catalog.Command
@@ -68,13 +87,12 @@ type Model struct {
 	arg        string
 	insertOnly bool
 
-	// Persistent (strip) mode: inject delivers each selection mid-loop
-	// instead of quitting, refresh polls live gear settings, notice is
-	// the footer's fire/error feedback, lastSettings dedups refresh
-	// applies so idle ticks never move a gear cursor. All nil/zero in
+	// Persistent (strip) mode: hooks deliver each selection mid-loop
+	// instead of quitting and keep gear state live; notice is the
+	// footer's fire/error feedback; lastSettings dedups refresh applies
+	// per gear so unchanged values never move a cursor. All zero in
 	// popup mode.
-	inject       func(cmd catalog.Command, arg string, insertOnly bool) error
-	refresh      func() map[string]string
+	hooks        PersistentHooks
 	notice       string
 	lastSettings map[string]string
 }
@@ -87,31 +105,32 @@ func New(commands []catalog.Command, placements []layout.Placement, st *theme.St
 }
 
 // Persistent flips the model into strip mode (STRIP-EMBED.md step 1):
-// firing a tile calls inject and the program keeps running, and refresh
-// is polled every stateRefreshInterval to keep gear markers live. Both
-// funcs run off the update loop (inside tea commands), so they may block
-// on tmux round trips.
-func (m Model) Persistent(inject func(cmd catalog.Command, arg string, insertOnly bool) error, refresh func() map[string]string) Model {
-	m.inject = inject
-	m.refresh = refresh
+// firing a tile delivers through h.Inject and the program keeps
+// running; h.Refresh is polled every stateRefreshInterval to keep gear
+// markers live. Both hooks run off the update loop (inside tea
+// commands), so they may block on tmux round trips.
+func (m Model) Persistent(h PersistentHooks) Model {
+	m.hooks = h
+	m.lastSettings = h.Seed
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	if m.refresh != nil {
-		return m.refreshTick()
-	}
-	return nil
+	return m.refreshTick()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width, m.height = size.Width, size.Height
 	}
-	// Refresh lands regardless of screen — a palette detour must not
-	// stall gear state or drop the tick chain.
-	if settings, ok := msg.(stateRefreshMsg); ok {
-		return m.applyRefresh(settings), m.refreshTick()
+	// Refresh and inject results land regardless of screen — a palette
+	// detour must not stall gear state or drop the tick chain.
+	switch msg := msg.(type) {
+	case stateRefreshMsg:
+		return m.applyRefresh(msg), m.refreshTick()
+	case noticeMsg:
+		m.notice = string(msg)
+		return m, nil
 	}
 	if m.screen == screenPalette {
 		return m.routePalette(msg)
@@ -146,7 +165,7 @@ func (m Model) View() tea.View {
 // invisible tile.
 func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(pressFrameDoneMsg); ok {
-		if m.inject == nil {
+		if m.hooks.Inject == nil {
 			return m, tea.Quit
 		}
 		return m.deliver()
@@ -158,15 +177,27 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selected = nil
 				m.arg = ""
 				m.insertOnly = false
+				if m.hooks.Inject != nil {
+					// Persistent mode: aborting a misclick must not cost
+					// the whole long-lived strip — disarm and live on.
+					m.armed = false
+					return m, nil
+				}
 			}
 			return m, tea.Quit
 		}
 	}
 	if m.armed {
-		return m, nil // the press frame owns the screen; its tick quits
+		return m, nil // the press frame owns the screen; its tick fires
 	}
 	if len(m.order) == 0 || m.canvasTooSmall() {
 		return m, nil
+	}
+	// Fresh input retires the previous fire's footer notice; the key
+	// legend comes back (hover motion floods, so it doesn't count).
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.MouseClickMsg:
+		m.notice = ""
 	}
 	switch msg := msg.(type) {
 	case tea.MouseClickMsg:
@@ -325,7 +356,7 @@ func (m Model) routePalette(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if sel, ok := m.palette.Selection(); ok {
 		m.selected = &sel
 		m.insertOnly = m.palette.InsertOnly()
-		if m.inject != nil {
+		if m.hooks.Inject != nil {
 			// Persistent mode: deliver and land back on the deck — the
 			// strip outlives every selection.
 			m.screen = screenDeck
@@ -338,8 +369,10 @@ func (m Model) routePalette(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // deliver fires the recorded selection through the injector and keeps
 // the program alive — the point of persistent mode (the popup's
-// quit-then-inject handoff can't work when there's no quit). The result
-// lands in the footer notice, the strip's only feedback surface.
+// quit-then-inject handoff can't work when there's no quit). The inject
+// runs inside the returned command, off the update loop (tmux round
+// trips must never freeze the UI); its result lands in the footer
+// notice, the strip's only feedback surface.
 func (m Model) deliver() (tea.Model, tea.Cmd) {
 	m.armed = false
 	if m.selected == nil {
@@ -347,44 +380,51 @@ func (m Model) deliver() (tea.Model, tea.Cmd) {
 	}
 	sel, arg, insertOnly := *m.selected, m.arg, m.insertOnly
 	m.selected, m.arg, m.insertOnly = nil, "", false
-	if err := m.inject(sel, arg, insertOnly); err != nil {
-		m.notice = err.Error()
-		return m, nil
+	inject := m.hooks.Inject
+	return m, func() tea.Msg {
+		if err := inject(sel, arg, insertOnly); err != nil {
+			return noticeMsg(err.Error())
+		}
+		notice := "→ /" + sel.Name
+		if arg != "" {
+			notice += " " + arg
+		}
+		return noticeMsg(notice)
 	}
-	m.notice = "→ /" + sel.Name
-	if arg != "" {
-		m.notice += " " + arg
-	}
-	return m, nil
 }
 
 // refreshTick schedules the next gear-state poll; the poll itself runs
-// inside the tick command, off the update loop.
+// inside the tick command, off the update loop. Nil without a Refresh
+// hook — popup mode never ticks.
 func (m Model) refreshTick() tea.Cmd {
-	refresh := m.refresh
+	refresh := m.hooks.Refresh
+	if refresh == nil {
+		return nil
+	}
 	return tea.Tick(stateRefreshInterval, func(time.Time) tea.Msg {
 		return stateRefreshMsg(refresh())
 	})
 }
 
-// applyRefresh re-marks gears from freshly polled settings. Unchanged
-// polls are skipped wholesale so an idle tick never resets a gear cursor
-// mid-navigation; when state did change, snapping the cursor to the new
-// current value is WithCurrent's normal behavior.
+// applyRefresh re-marks gears whose polled value changed since the last
+// poll (Seed counts as the zeroth). Per-gear granularity: an unchanged
+// gear is never touched, so a poll can't snap a mid-navigation cursor
+// on a gear whose state didn't move; when a gear's value did change,
+// snapping its cursor to the new current is WithCurrent's normal
+// behavior.
 func (m Model) applyRefresh(settings map[string]string) Model {
-	if maps.Equal(settings, m.lastSettings) {
-		return m
-	}
-	m.lastSettings = settings
 	for i, p := range m.order {
 		g, ok := p.Tile.(widget.Gear)
 		if !ok {
 			continue
 		}
-		if v, ok := settings[g.Cmd.Name]; ok {
-			m.order[i].Tile = g.WithCurrent(v)
+		v, ok := settings[g.Cmd.Name]
+		if !ok || v == m.lastSettings[g.Cmd.Name] {
+			continue
 		}
+		m.order[i].Tile = g.WithCurrent(v)
 	}
+	m.lastSettings = settings
 	return m
 }
 

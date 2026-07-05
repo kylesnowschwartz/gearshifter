@@ -163,7 +163,7 @@ func runPick(args []string) error {
 	}
 	inbuilt, layoutPath, err := resolveLayout(*layoutName)
 	if err != nil {
-		return err
+		return fmt.Errorf("pick: %w", err)
 	}
 	styles, err := theme.Load(*themeName)
 	if err != nil {
@@ -210,12 +210,12 @@ func runStrip(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *layoutName == layoutTelescope {
-		return fmt.Errorf("strip: telescope quits on selection; strip needs a deck-shaped layout")
-	}
-	_, layoutPath, err := resolveLayout(*layoutName)
+	inbuilt, layoutPath, err := resolveLayout(*layoutName)
 	if err != nil {
-		return err
+		return fmt.Errorf("strip: %w", err)
+	}
+	if inbuilt == layoutTelescope {
+		return fmt.Errorf("strip: telescope quits on selection; strip needs a deck-shaped layout")
 	}
 	styles, err := theme.Load(*themeName)
 	if err != nil {
@@ -264,11 +264,20 @@ func runStrip(args []string) error {
 	refresh := func() map[string]string {
 		target, err := resolve()
 		if err != nil {
-			return nil
+			// No target: gears honestly stateless (markers clear) instead
+			// of advertising a dead session's state forever.
+			return layout.GearSettings(agent.State{})
 		}
 		return layout.GearSettings(provider.State(target.PID, target.Cwd))
 	}
-	if _, err := tea.NewProgram(app.New(cmds, placements, styles).Persistent(inject, refresh)).Run(); err != nil {
+	hooks := app.PersistentHooks{
+		Inject:  inject,
+		Refresh: refresh,
+		// Seed with the startup snapshot the placements were built from,
+		// so the first poll that matches it can't snap gear cursors.
+		Seed: layout.GearSettings(state),
+	}
+	if _, err := tea.NewProgram(app.New(cmds, placements, styles).Persistent(hooks)).Run(); err != nil {
 		return fmt.Errorf("strip: %w", err)
 	}
 	return nil
@@ -282,6 +291,11 @@ func runStrip(args []string) error {
 func stripTarget(client *tmux.Client, provider agent.Provider, explicit, self string) func() (tmux.Pane, error) {
 	return func() (tmux.Pane, error) {
 		if explicit != "" {
+			if explicit == self {
+				// Injecting into the strip's own pane would loop: the
+				// trailing Enter re-fires the focused tile, forever.
+				return tmux.Pane{}, fmt.Errorf("target pane %s is the strip itself", explicit)
+			}
 			if !client.PaneExists(explicit) {
 				return tmux.Pane{}, fmt.Errorf("target pane %s is gone", explicit)
 			}
@@ -320,7 +334,9 @@ func resolveLayout(name string) (inbuilt, path string, err error) {
 		return name, "", nil
 	}
 	if _, statErr := os.Stat(name); statErr != nil {
-		return "", "", fmt.Errorf("pick: unknown layout %q — not an inbuilt (%s, %s) and not a readable layout.toml path",
+		// No subcommand prefix: pick and strip both resolve through here
+		// and wrap with their own name.
+		return "", "", fmt.Errorf("unknown layout %q — not an inbuilt (%s, %s) and not a readable layout.toml path",
 			name, layoutTelescope, layoutDeck)
 	}
 	return "", name, nil

@@ -138,7 +138,11 @@ type Pane struct {
 }
 
 // WindowPanes lists the panes of the window containing pane, in tmux
-// index order.
+// index order. Rows that don't parse are skipped, not fatal: a pane
+// whose cwd tmux can't resolve expands #{pane_current_path} to empty,
+// and when that pane sorts last the Runner's TrimSpace eats its
+// trailing tab — such a pane can never be an injection target, and one
+// bad row must not brick the scan of an otherwise healthy window.
 func (c *Client) WindowPanes(pane string) ([]Pane, error) {
 	out, err := c.run.Run("", "list-panes", "-t", pane, "-F",
 		"#{pane_id}\t#{pane_pid}\t#{pane_current_path}")
@@ -147,16 +151,13 @@ func (c *Client) WindowPanes(pane string) ([]Pane, error) {
 	}
 	var panes []Pane
 	for _, line := range strings.Split(out, "\n") {
-		if line == "" {
-			continue
-		}
 		fields := strings.SplitN(line, "\t", 3)
 		if len(fields) != 3 {
-			return nil, fmt.Errorf("list-panes: bad row %q", line)
+			continue
 		}
 		pid, err := strconv.Atoi(fields[1])
 		if err != nil {
-			return nil, fmt.Errorf("pane %s: bad pid %q", fields[0], fields[1])
+			continue
 		}
 		panes = append(panes, Pane{ID: fields[0], PID: pid, Cwd: fields[2]})
 	}

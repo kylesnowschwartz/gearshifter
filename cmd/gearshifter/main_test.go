@@ -128,6 +128,16 @@ func TestStripTargetExplicitPin(t *testing.T) {
 	}
 }
 
+// Pinning the strip's own pane must fail with words: self-injection
+// loops — the recipe's trailing Enter re-fires the focused tile,
+// forever (review finding, CONFIRMED).
+func TestStripTargetRejectsSelfPin(t *testing.T) {
+	client := tmux.NewClient(scriptRunner{})
+	if _, err := stripTarget(client, fakeProvider{}, "%0", "%0")(); err == nil || !strings.Contains(err.Error(), "itself") {
+		t.Errorf("self pin must be rejected with words, got %v", err)
+	}
+}
+
 func TestRunStripRejectsTelescope(t *testing.T) {
 	err := runStrip([]string{"--layout", "telescope"})
 	if err == nil || !strings.Contains(err.Error(), "telescope") {
