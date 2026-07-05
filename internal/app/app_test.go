@@ -554,6 +554,31 @@ func TestCompactEscCollapsesAndNeverQuits(t *testing.T) {
 	}
 }
 
+// A footer notice retires itself after noticeTTL; a newer notice must
+// survive an older notice's expiry timer (companion QA 2026-07-06 —
+// the lingering "→ /cmd" read as ghost text).
+func TestCompactNoticeAutoExpires(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+	updated, cmd := m.Update(noticeMsg("→ /memory"))
+	m = updated.(Model)
+	if m.notice != "→ /memory" || cmd == nil {
+		t.Fatalf("notice = %q (cmd nil=%v), want the text and an expiry timer", m.notice, cmd == nil)
+	}
+	updated, _ = m.Update(noticeMsg("→ /compact")) // supersedes; gen bumps
+	m = updated.(Model)
+	updated, _ = m.Update(noticeExpireMsg{gen: 1}) // the FIRST notice's timer
+	m = updated.(Model)
+	if m.notice != "→ /compact" {
+		t.Errorf("a stale timer wiped a fresh notice: %q", m.notice)
+	}
+	updated, _ = m.Update(noticeExpireMsg{gen: 2})
+	m = updated.(Model)
+	if m.notice != "" {
+		t.Errorf("the matching timer must clear the notice, got %q", m.notice)
+	}
+}
+
 // Hover leaving every tile hides the focus ring — tmux sends no
 // pane-leave event, so off-tile motion (gutters, footer) is the best
 // exit signal (companion QA 2026-07-06). Any key re-shows it.

@@ -54,6 +54,15 @@ type stateRefreshMsg map[string]string
 // back from the off-loop inject command into the footer.
 type noticeMsg string
 
+// noticeTTL retires a footer notice on its own — a strip nobody
+// touches shouldn't show "→ /cmd" forever (it read as ghost text,
+// companion QA 2026-07-06). Fresh input still clears it early.
+const noticeTTL = 5 * time.Second
+
+// noticeExpireMsg clears the notice it was armed for; gen guards a
+// newer notice from being wiped by an older notice's timer.
+type noticeExpireMsg struct{ gen int }
+
 // PersistentHooks is everything strip mode wires into the app — one
 // semantic bundle so "is this a strip?" is one question (Inject != nil),
 // never two drifting nil checks.
@@ -100,6 +109,7 @@ type Model struct {
 	// popup mode.
 	hooks        PersistentHooks
 	notice       string
+	noticeGen    int // guards notice expiry against superseding notices
 	lastSettings map[string]string
 
 	// compact renders the chip flow instead of the 13-column grid
@@ -148,6 +158,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.applyRefresh(msg), m.refreshTick()
 	case noticeMsg:
 		m.notice = string(msg)
+		m.noticeGen++
+		gen := m.noticeGen
+		return m, tea.Tick(noticeTTL, func(time.Time) tea.Msg { return noticeExpireMsg{gen} })
+	case noticeExpireMsg:
+		if msg.gen == m.noticeGen {
+			m.notice = ""
+		}
 		return m, nil
 	}
 	if m.screen == screenPalette {
