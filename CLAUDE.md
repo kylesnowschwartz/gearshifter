@@ -97,14 +97,24 @@ P1 theme seam, P2 tile states + nameplate buttons, P4 wordmark gradient
 SHIPPED (M5-AESTHETIC.md); P3 clawd mascot skipped for now; frame-dedup
 refactor done (theme.FrameStyles + widget.tileFrame + one Styles.Armed
 role + theme.ApplySurface). Only P5 house palette remains — deferred
-until Kyle wants to decide colors.** Distribution is parked as M6 until
+until Kyle wants to decide colors.** **Strip (STRIP-EMBED.md) step 1
+SHIPPED 2026-07-05: `gearshifter strip` runs the deck as a persistent
+pane widget — app.PersistentHooks (Inject/Refresh/Seed) deliver each
+fire off-loop as a tea.Cmd, the target Claude pane is re-resolved PER
+FIRE (explicit `--pane` pin, never self, else window scan via
+`agent.Provider.HasSession`), gear state re-polls every 5s through
+layout.GearSettings with per-gear dedup. Popup pane-targeting stays
+origin-at-keypress; strip's per-fire scan is the settled exception.
+Steps 2–5 (glyph chips, gear transient menu, clawd flourish, tcm
+embedding) not started.** Distribution is parked as M6 until
 someone besides Kyle wants an install. The deck is the default UI;
 a `run-shell .../gearshifter.tmux` line in tmux.conf owns the permanent
 `prefix+C-g` binding (`just bind-dev` sources the same file for dev);
 `@gearshifter-layout/width/height` are honored at keypress time;
 telescope stays one flag away. Dev loop: `just check` after every
-substantive change; `just qa-rig` (popup rig, 14 assertions incl. deck
-click + plugin binding end-to-end) before merging UI work.
+substantive change; `just qa-rig` (popup rig, 20 assertions incl. deck
+click, plugin binding, and strip persistent-pane end-to-end) before
+merging UI work.
 
 Done foundations (2026-07-04): M0 injection spike (recipe above); product
 spec v1; interview settled D1–D4; architecture draft; prior-art survey
