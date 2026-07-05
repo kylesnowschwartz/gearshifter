@@ -76,6 +76,12 @@ type Model struct {
 	order    []layout.Placement
 	styles   *theme.Styles
 	focus    int
+	// focusHidden suppresses the focus ring after hover leaves every
+	// tile — tmux sends no pane-leave event, so off-tile motion (the
+	// gutters and footer are the exit lanes) is the best signal that
+	// the pointer is gone. m.focus itself stays valid for the keyboard;
+	// any key, wheel, or click re-shows the ring.
+	focusHidden bool
 
 	screen  screen
 	palette palette.Model
@@ -97,8 +103,8 @@ type Model struct {
 	lastSettings map[string]string
 
 	// compact renders the chip flow instead of the 13-column grid
-	// (STRIP-EMBED step 2): tiles pack left-to-right by natural width,
-	// wrapping at the canvas edge — built for the ~33-col tcm sidebar.
+	// (STRIP-EMBED step 2): chips snap to a column grid, wrapping at
+	// the canvas edge, no wordmark — built for the ~33-col tcm sidebar.
 	compact bool
 }
 
@@ -222,6 +228,9 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case tea.KeyPressMsg, tea.MouseClickMsg:
 		m.notice = ""
+		m.focusHidden = false
+	case tea.MouseWheelMsg:
+		m.focusHidden = false
 	}
 	switch msg := msg.(type) {
 	case tea.MouseClickMsg:
@@ -304,8 +313,10 @@ func (m Model) handleDeckMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 	hit := m.compositor().Hit(msg.X, msg.Y)
 	i, ok := hitTile(hit)
 	if !ok || i >= len(m.order) {
+		m.focusHidden = true
 		return m, nil
 	}
+	m.focusHidden = false
 	m.focus = i
 	if g, isGear := m.order[i].Tile.(widget.Gear); isGear {
 		if v, ok := g.ValueAt(msg.Y - hit.Bounds().Min.Y); ok {
@@ -538,8 +549,11 @@ func (m Model) compositor() *lipgloss.Compositor {
 	// plus the footer hint line.
 	margin := strings.Repeat(" ", marginX)
 	base := make([]string, 0, tileRows+2)
-	base = append(base, margin+theme.BlendForeground(" GEARSHIFTER ",
-		m.styles.Chrome.Wordmark, m.styles.Chrome.WordmarkBlend))
+	if !m.compact {
+		// Compact drops the wordmark — every row belongs to chips.
+		base = append(base, margin+theme.BlendForeground(" GEARSHIFTER ",
+			m.styles.Chrome.Wordmark, m.styles.Chrome.WordmarkBlend))
+	}
 	for len(base) < tileRows+1 {
 		base = append(base, "")
 	}
@@ -564,7 +578,7 @@ func (m Model) gridLayers() ([]*lipgloss.Layer, int) {
 	layers := make([]*lipgloss.Layer, 0, len(m.order))
 	for i, p := range m.order {
 		x, w := grid.Cell(p.Col, p.Tile.Span())
-		rs := widget.RenderState{Focused: i == m.focus, Armed: m.armed && i == m.focus}
+		rs := widget.RenderState{Focused: i == m.focus && !m.focusHidden, Armed: m.armed && i == m.focus}
 		layers = append(layers, lipgloss.NewLayer(p.Tile.View(rs, w)).
 			ID("tile:"+strconv.Itoa(i)).X(marginX+x).Y(p.Y).Z(1))
 		if bottom := p.Y + p.Tile.Rows(); bottom > tileRows {
@@ -574,9 +588,10 @@ func (m Model) gridLayers() ([]*lipgloss.Layer, int) {
 	return layers, tileRows
 }
 
-// flowBodyY is the first chip row: right under the wordmark — a strip
-// pane has no rows to spare on breathing room.
-const flowBodyY = 1
+// flowBodyY is the first chip row: the very top — compact mode drops
+// the wordmark (companion QA 2026-07-06: a strip pane has no rows to
+// spare on branding).
+const flowBodyY = 0
 
 // flowLayers packs chips onto a column grid, wrapping at the canvas
 // edge (STRIP-EMBED step 2). Every chip is granted the width of the
@@ -601,7 +616,7 @@ func (m Model) flowLayers() ([]*lipgloss.Layer, int) {
 		if w > maxX-x {
 			w = maxX - x
 		}
-		rs := widget.RenderState{Focused: i == m.focus, Armed: m.armed && i == m.focus}
+		rs := widget.RenderState{Focused: i == m.focus && !m.focusHidden, Armed: m.armed && i == m.focus}
 		layers = append(layers, lipgloss.NewLayer(p.Tile.View(rs, w)).
 			ID("tile:"+strconv.Itoa(i)).X(x).Y(y).Z(1))
 		if ownRow {

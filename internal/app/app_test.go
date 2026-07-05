@@ -486,10 +486,13 @@ func compactModel(fired *[]firedCall) Model {
 func TestCompactFlowRendersWithin33Cols(t *testing.T) {
 	var fired []firedCall
 	content := compactModel(&fired).View().Content
-	for _, want := range []string{"GEARSHIFTER", "M:haiku", "E:low", "▣ COMPACT", "⧉ COPY", "ALL COMMANDS"} {
+	for _, want := range []string{"M:haiku", "E:low", "▣ COMPACT", "⧉ COPY", "ALL COMMANDS"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("compact view missing %q:\n%s", want, content)
 		}
+	}
+	if strings.Contains(content, "GEARSHIFTER") {
+		t.Error("compact view must drop the wordmark — every row belongs to chips")
 	}
 	for i, line := range strings.Split(content, "\n") {
 		if w := lipgloss.Width(line); w > 33 {
@@ -502,8 +505,9 @@ func TestCompactGearChipExpandNavigateFire(t *testing.T) {
 	var fired []firedCall
 	m := compactModel(&fired)
 
-	// MODEL is the first chip: top-left of the flow. Click expands.
-	updated, _ := m.Update(tea.MouseClickMsg{X: 2, Y: 1, Button: tea.MouseLeft})
+	// MODEL is the first chip: top-left of the flow (row 0 — compact
+	// has no wordmark). Click expands.
+	updated, _ := m.Update(tea.MouseClickMsg{X: 2, Y: 0, Button: tea.MouseLeft})
 	m = updated.(Model)
 	gc, ok := m.order[0].Tile.(widget.GearChip)
 	if !ok || !gc.Expanded {
@@ -550,6 +554,27 @@ func TestCompactEscCollapsesAndNeverQuits(t *testing.T) {
 	}
 }
 
+// Hover leaving every tile hides the focus ring — tmux sends no
+// pane-leave event, so off-tile motion (gutters, footer) is the best
+// exit signal (companion QA 2026-07-06). Any key re-shows it.
+func TestCompactHoverRingClearsOffTiles(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+	updated, _ := m.Update(tea.MouseMotionMsg{X: 2, Y: 0})
+	m = updated.(Model)
+	if m.focusHidden {
+		t.Fatal("motion over a chip must show the ring")
+	}
+	updated, _ = m.Update(tea.MouseMotionMsg{X: 2, Y: 18}) // footer void
+	m = updated.(Model)
+	if !m.focusHidden {
+		t.Error("motion off every tile must hide the ring")
+	}
+	if m = press(m, "l"); m.focusHidden {
+		t.Error("a keypress must re-show the ring")
+	}
+}
+
 // Chips snap to a column grid so labels line up row over row
 // (companion QA 2026-07-06). The launcher spans columns instead of
 // defining them; gear rows use the same origin.
@@ -581,14 +606,14 @@ func TestCompactGearExpansionNeverReflowsChips(t *testing.T) {
 	var fired []firedCall
 	m := compactModel(&fired)
 	before := strings.Split(m.View().Content, "\n")
-	updated, _ := m.Update(tea.MouseClickMsg{X: 2, Y: 1, Button: tea.MouseLeft}) // expand MODEL
+	updated, _ := m.Update(tea.MouseClickMsg{X: 2, Y: 0, Button: tea.MouseLeft}) // expand MODEL
 	m = updated.(Model)
 	after := strings.Split(m.View().Content, "\n")
 	if len(before) != len(after) {
 		t.Fatalf("expansion changed the row count: %d → %d", len(before), len(after))
 	}
 	for i := range before {
-		if i == 1 {
+		if i == 0 {
 			continue // MODEL's own row is the one allowed to change
 		}
 		if before[i] != after[i] {
