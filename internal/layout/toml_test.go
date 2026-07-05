@@ -97,7 +97,7 @@ values  = ["haiku", "sonnet"]
 	}
 }
 
-// Every breakage fails with words that name the offending line (Kyle QA
+// Every breakage fails with words that name the offending line (QA
 // contract: break the file on purpose — the error names the line).
 func TestLoadErrorsNameTheLine(t *testing.T) {
 	cases := []struct {
@@ -129,7 +129,7 @@ func TestLoadErrorsNameTheLine(t *testing.T) {
 	}
 }
 
-// custom.toml is the personalized example (né kyle.toml), not
+// custom.toml is the personalized example (né personal.toml), not
 // Default-pinned — but it must always parse, and its insert feature
 // must hold. (Its STYLE gear was removed 2026-07-05: Claude Code
 // dropped /output-style and /config rejects custom styles

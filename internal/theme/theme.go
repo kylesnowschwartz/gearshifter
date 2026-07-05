@@ -31,7 +31,7 @@ const (
 // codepoints paint two cells on ambiguous-wide terminals (CJK configs),
 // shifting every chip after them (review 2026-07-06 swapped out
 // ▣ ◆ ¤ ▤ ⚿ for exactly that). Coverage beyond width is
-// Kyle's-eyeball territory — a glyph a font lacks shows as tofu, not a
+// eyeball-QA territory — a glyph a font lacks shows as tofu, not a
 // layout break.
 var glyphs = map[string]string{
 	"compact":        "⊟",

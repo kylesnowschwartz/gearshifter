@@ -35,7 +35,7 @@ var (
 
 // buttonsPerRow splits the button field: 4 across over deck.MainSpan
 // (8 = 4 × span-2, the main field's even split). Flipped from 2 on
-// 2026-07-05 after Kyle QA'd the dense demo (examples/dense.toml).
+// 2026-07-05 after QA on the dense demo (examples/dense.toml).
 const buttonsPerRow = 4
 
 // entry pairs a tile with its start column (and authored chip glyph)
@@ -71,7 +71,7 @@ func flow(entries []entry) []Placement {
 // launcher as a full-width bottom bar. Buttons are generic built-ins:
 // the data-ranked six-pack (DECK-CONTENT.md, 2026-07-05) leads in
 // reading order, the rest fill the dense field (flipped from 2×3 the
-// same day, Kyle's call after the dense demo). Placement order =
+// same day, a call made after the dense demo). Placement order =
 // reading order = the app's focus order. state marks each gear's live
 // value (V7); st styles every tile.
 func Default(commands []catalog.Command, state agent.State, st *theme.Styles) []Placement {

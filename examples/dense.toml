@@ -8,7 +8,7 @@
 # Needs ~30 popup rows (4 button rows + rail + launcher); bump
 # @gearshifter-height / -h if the deck reports the canvas too small.
 #
-# Shipped as the pinned dense example (Kyle-QA'd 2026-07-05); the
+# Shipped as the pinned dense example (QA'd 2026-07-05); the
 # shipped default stays 2-col — density is opt-in (CS-008 staged flips).
 
 [[tile]]

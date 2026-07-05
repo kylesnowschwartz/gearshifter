@@ -88,7 +88,7 @@ package importing agent-ouija.
 M0–M4 shipped, deck content settled from real usage data
 (DECK-CONTENT.md: default = MODEL/EFFORT gears + COMPACT/COPY/CLEAR/
 CONTEXT/RESUME/CONFIG six-pack; the personalized example
-`examples/custom.toml` (né kyle.toml; Kyle's daily layout) adds a GOAL
+`examples/custom.toml` (né personal.toml; the maintainer's daily layout) adds a GOAL
 insert-tile, RADIO, RELOAD — its STYLE gear was REMOVED 2026-07-05:
 Claude Code dropped /output-style and /config rejects custom styles
 non-interactively; revival route = a /style command in the
@@ -97,7 +97,7 @@ P1 theme seam, P2 tile states + nameplate buttons, P4 wordmark gradient
 SHIPPED (M5-AESTHETIC.md); P3 clawd mascot skipped for now; frame-dedup
 refactor done (theme.FrameStyles + widget.tileFrame + one Styles.Armed
 role + theme.ApplySurface). Only P5 house palette remains — deferred
-until Kyle wants to decide colors.** **Strip (STRIP-EMBED.md) steps 1–3
+until the maintainer wants to decide colors.** **Strip (STRIP-EMBED.md) steps 1–3
 SHIPPED (step 1 2026-07-05; steps 2–3 compact chip flow 2026-07-06
 after a full pre-merge review round): `gearshifter strip [--compact]`
 runs the deck as a persistent pane widget — app.PersistentHooks
@@ -115,10 +115,10 @@ pointer leaves all tiles and hover-away collapses gear rows; pointer
 events bounded by RENDERED rows; model badge arbitrates by transcript
 ENTRY time, not file mtime (agent-ouija v1.1.0 LastAssistantModelAt,
 pin bumped). Live as a tcm companion pane (tcm-side spec:
-tail-claude-mux/.agent-history/COMPANION-PANE-SPEC.md; Kyle runs
+tail-claude-mux/.agent-history/COMPANION-PANE-SPEC.md; the maintainer runs
 `--theme plain`). Steps 4–5 (clawd flourish, tcm embed docs) remain;
 parked perf notes in STRIP-EMBED.md.** Distribution is parked as M6
-until someone besides Kyle wants an install. The deck is the default
+until someone besides the maintainer wants an install. The deck is the default
 UI; a `run-shell .../gearshifter.tmux` line in tmux.conf owns the
 permanent `prefix+C-g` binding (`just bind-dev` sources the same
 file for dev); `@gearshifter-layout/width/height` are honored at
@@ -187,7 +187,7 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    telescope`, never delete it. Post-review refactor (e319781): app
    records selection / main injects; `layout` is the only bridge package.
 5. **M4 local fit: DONE (2026-07-05, M4-LOCAL-FIT.md).** Re-scoped with
-   Kyle after M3: the M3 deliverable is a complete local MVP, so the old
+   the maintainer after M3: the M3 deliverable is a complete local MVP, so the old
    distribution-flavored M4 was premature. Shipped: `gearshifter.tmux`
    entry point (a tmux.conf `run-shell` line installs the binding
    permanently; `just bind-dev` sources the same file; builds the binary
@@ -201,7 +201,7 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    P3 clawd mascot skipped for now (k9s recipe documented for later);
    structural frame-dedup done. Remaining: **P5 house palette only** —
    a *designed* ramp palette per the TUI-AESTHETICS.md verdict (DMG /
-   PICO-8 demoted to optional retro themes), deferred until Kyle wants
+   PICO-8 demoted to optional retro themes), deferred until the maintainer wants
    to decide colors.
 7. **M6 distribution (parked until an external user exists):** TPM
    bootstrap, goreleaser, CI, bump/release recipes; also parked: opt-in

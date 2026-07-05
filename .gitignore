@@ -1,1 +1,6 @@
 /bin/
+/.agent-history/
+/.claude/settings.local.json
+go.work
+go.work.sum
+.DS_Store

@@ -103,7 +103,7 @@ func TestStateSurvivesTranscriptDrift(t *testing.T) {
 	}
 }
 
-// Kyle's live repro (2026-07-05, strip QA): /model opus writes
+// Live repro (2026-07-05, strip QA): /model opus writes
 // settings.json AND appends a user entry to the transcript in the same
 // breath, so the transcript FILE is newer than settings while its last
 // assistant entry (the model fact) is old. The fact's entry timestamp
