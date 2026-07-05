@@ -119,30 +119,44 @@ func (b Button) WithInsert() Button {
 	return b
 }
 
-// buttonContentRows: big centered label + dim /command sublabel.
-const buttonContentRows = 2
+// buttonContentRows: one big centered label; the /command lives in the
+// bottom border (NAMEPLATE EXPERIMENT — superfile's border-embedded
+// info slot returns the sublabel row, tui-research/02 §3).
+const buttonContentRows = 1
 
 func (b Button) Activate() tea.Msg { return TileActivatedMsg{Command: b.Cmd, Insert: b.Insert} }
 func (b Button) Span() int         { return b.span }
 func (b Button) Rows() int         { return borderRows + buttonContentRows }
 
+// View hand-rolls the frame (like Gear) so the /command nameplate can
+// splice into the bottom border: └┤ /compact ├──┘. When the nameplate
+// can't fit, it degrades to a plain border (superfile's truncate-away
+// fallback).
 func (b Button) View(rs RenderState, width int) string {
 	st := b.styles.Button
+	chars, frame := st.Border, st.Frame
+	if rs.Focused || rs.Armed {
+		chars, frame = st.BorderFocus, st.FrameFocus
+	}
 	inner := width - borderCols
 	label := center(b.Label, inner)
-	boxStyle := st.Box
 	switch {
 	case rs.Armed:
 		label = st.LabelArmed.Render(label)
-		boxStyle = st.BoxFocus
 	case rs.Focused:
 		label = st.LabelFocus.Render(label)
-		boxStyle = st.BoxFocus
 	default:
 		label = st.Label.Render(label)
 	}
-	sub := st.Sub.Render(center("/"+b.Cmd.Name, inner))
-	return box(boxStyle, width, label, sub)
+	side := frame.Render(chars.Left)
+	top := frame.Render(chars.TopLeft + strings.Repeat(chars.Top, max(0, inner)) + chars.TopRight)
+	bottom := frame.Render(chars.BottomLeft + strings.Repeat(chars.Bottom, max(0, inner)) + chars.BottomRight)
+	if plate := " /" + b.Cmd.Name + " "; lipgloss.Width(plate)+2 <= inner {
+		bottom = frame.Render(chars.BottomLeft+chars.MiddleRight) +
+			st.Sub.Render(plate) +
+			frame.Render(chars.MiddleLeft+strings.Repeat(chars.Bottom, inner-lipgloss.Width(plate)-2)+chars.BottomRight)
+	}
+	return top + "\n" + side + label + side + "\n" + bottom
 }
 
 // Gear selects one value of an enum command (gated column, locked UX

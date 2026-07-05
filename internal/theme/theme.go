@@ -68,12 +68,19 @@ type Styles struct {
 // dim /command sublabel. Armed is the ~150ms press frame between fire
 // and popup close (P2) — the one moment a tile fills.
 type ButtonStyles struct {
-	Box        lipgloss.Style
-	BoxFocus   lipgloss.Style
-	Label      lipgloss.Style
-	LabelFocus lipgloss.Style
-	LabelArmed lipgloss.Style
-	Sub        lipgloss.Style
+	Box      lipgloss.Style
+	BoxFocus lipgloss.Style
+	// NAMEPLATE EXPERIMENT (this branch only): buttons hand-roll their
+	// frame to splice the /command into the bottom border, so they need
+	// gear-style charsets + frame colors.
+	Border      lipgloss.Border
+	BorderFocus lipgloss.Border
+	Frame       lipgloss.Style
+	FrameFocus  lipgloss.Style
+	Label       lipgloss.Style
+	LabelFocus  lipgloss.Style
+	LabelArmed  lipgloss.Style
+	Sub         lipgloss.Style
 }
 
 // GearStyles renders a gear tile: hand-rolled frame (title embedded in
@@ -131,12 +138,16 @@ func New(p Palette) *Styles {
 		Background: p.BgBase,
 		Foreground: p.FgBase,
 		Button: ButtonStyles{
-			Box:        box,
-			BoxFocus:   boxFocus,
-			Label:      fgBase,
-			LabelFocus: labelFocus,
-			LabelArmed: armed,
-			Sub:        fgMuted,
+			Box:         box,
+			BoxFocus:    boxFocus,
+			Border:      lipgloss.NormalBorder(),
+			BorderFocus: lipgloss.NormalBorder(),
+			Frame:       lipgloss.NewStyle().Foreground(p.Border),
+			FrameFocus:  lipgloss.NewStyle().Foreground(p.BorderFocus),
+			Label:       fgBase,
+			LabelFocus:  labelFocus,
+			LabelArmed:  armed,
+			Sub:         fgMuted,
 		},
 		Gear: GearStyles{
 			Border:       lipgloss.NormalBorder(),
@@ -181,12 +192,16 @@ func Plain() *Styles {
 	armed := lipgloss.NewStyle().Reverse(true).Bold(true)
 	return &Styles{
 		Button: ButtonStyles{
-			Box:        lipgloss.NewStyle().Border(lipgloss.NormalBorder()),
-			BoxFocus:   lipgloss.NewStyle().Border(lipgloss.DoubleBorder()),
-			Label:      none,
-			LabelFocus: reversed,
-			LabelArmed: armed,
-			Sub:        faint,
+			Box:         lipgloss.NewStyle().Border(lipgloss.NormalBorder()),
+			BoxFocus:    lipgloss.NewStyle().Border(lipgloss.DoubleBorder()),
+			Border:      lipgloss.NormalBorder(),
+			BorderFocus: lipgloss.DoubleBorder(),
+			Frame:       none,
+			FrameFocus:  none,
+			Label:       none,
+			LabelFocus:  reversed,
+			LabelArmed:  armed,
+			Sub:         faint,
 		},
 		Gear: GearStyles{
 			Border:       lipgloss.NormalBorder(),

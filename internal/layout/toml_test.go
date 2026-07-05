@@ -54,9 +54,10 @@ command = "context"
 	if placements[0].Y != 2 {
 		t.Errorf("first row must sit at bodyY, got %d", placements[0].Y)
 	}
-	// full-width tile (rows 2..5) + rowGap → the overlapping tile lands at 7
-	if placements[1].Y != 7 {
-		t.Errorf("overlapping tile must drop below, got y=%d, want 7", placements[1].Y)
+	// NAMEPLATE EXPERIMENT: buttons are 3 rows (label + borders, /cmd in
+	// the bottom border), so the overlapping tile lands at 6, not 7.
+	if placements[1].Y != 6 {
+		t.Errorf("overlapping tile must drop below, got y=%d, want 6", placements[1].Y)
 	}
 }
 
