@@ -125,7 +125,9 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    `/`. V7 answered: gears read `~/.claude/settings.json` (model,
    effortLevel), session-specific model via pane pid → sessions registry →
    transcript scan, mtime-arbitrated (`internal/agent` Provider seam,
-   `agent/claude` implementation). layout.toml (`internal/layout`,
+   `agent/claude` implementation; the registry/transcript/path mechanics
+   are delegated to the shared agent-ouija library — only the
+   mtime-arbitration policy lives here). layout.toml (`internal/layout`,
    go-toml/v2 strict): [[tile]] col+span, rows always derived by skyline
    `flow`, line-precise errors to the status line, `examples/layout.toml`
    pinned to `Default` by test; min-canvas rule degrades to a clear
