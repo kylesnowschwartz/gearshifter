@@ -252,7 +252,11 @@ func (g GearChip) View(rs RenderState, width int) string {
 		switch {
 		case rs.Armed && s.value == g.cursor:
 			b.WriteString(g.styles.Armed.Render(cell))
-		case s.value == g.cursor:
+		case rs.Focused && s.value == g.cursor:
+			// The cursor highlight is a focus artifact: when hover
+			// leaves the strip (rs.Focused drops with the ring), a
+			// lingering white block would read as a stuck selection
+			// (companion QA 2026-07-06). The current-value mark stays.
 			b.WriteString(st.ValueCursor.Render(cell))
 		case s.value == g.current:
 			b.WriteString(st.ValueCurrent.Render(cell))

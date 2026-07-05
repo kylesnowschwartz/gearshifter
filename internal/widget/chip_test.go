@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 )
 
 func modelGearChip() GearChip {
@@ -41,6 +42,29 @@ func TestGearChipBadgeMarksCurrent(t *testing.T) {
 	g = g.WithCurrent("opus")
 	if badge := g.badge(); badge != "M:opus" {
 		t.Errorf("live badge = %q, want M:opus", badge)
+	}
+}
+
+// The cursor highlight is a focus artifact: an unfocused expanded row
+// renders identically wherever the cursor sits (companion QA
+// 2026-07-06 — a hover-stranded white block read as a stuck
+// selection). Needs a colored theme; plain renders everything alike.
+func TestGearChipCursorHighlightNeedsFocus(t *testing.T) {
+	st, err := theme.Load("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := NewGearChip(st, catalog.Command{Name: "model"}, "MODEL",
+		[]string{"haiku", "sonnet", "opus", "fable"}).WithCurrent("opus").Expand()
+	moved := g.CursorNext() // cursor off the current value
+	w := g.NaturalWidth()
+	unfocused := RenderState{}
+	if g.View(unfocused, w) != moved.View(unfocused, w) {
+		t.Error("an unfocused row must not paint the cursor — it renders the same wherever the cursor sits")
+	}
+	focused := RenderState{Focused: true}
+	if g.View(focused, w) == moved.View(focused, w) {
+		t.Error("a focused row must paint the cursor")
 	}
 }
 
