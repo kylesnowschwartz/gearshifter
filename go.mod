@@ -6,7 +6,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.8
 	charm.land/lipgloss/v2 v2.0.5
 	github.com/goccy/go-yaml v1.19.2
-	github.com/kylesnowschwartz/agent-ouija v0.3.0
+	github.com/kylesnowschwartz/agent-ouija v1.1.0
 	github.com/pelletier/go-toml/v2 v2.4.2
 )
 
