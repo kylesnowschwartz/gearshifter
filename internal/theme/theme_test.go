@@ -1,8 +1,11 @@
 package theme
 
 import (
+	"image/color"
 	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
 )
 
 func TestLoadKnownThemes(t *testing.T) {
@@ -47,6 +50,24 @@ func TestColoredThemesOwnTheSurfacePlainInherits(t *testing.T) {
 	}
 	if p := Plain(); p.Background != nil || p.Foreground != nil {
 		t.Error("plain must inherit the terminal's surface")
+	}
+}
+
+func TestBlendForegroundGradientAndPlainPassthrough(t *testing.T) {
+	base := lipgloss.NewStyle().Bold(true).Reverse(true)
+	// Plain path: fewer than two stops must be byte-identical to base.
+	if got := BlendForeground("GEAR", base, nil); got != base.Render("GEAR") {
+		t.Errorf("nil stops must render base unchanged, got %q", got)
+	}
+	// Gradient path: distinct stops give the first and last rune
+	// different foregrounds, and geometry is untouched.
+	stops := []color.Color{lipgloss.Color("#D97757"), lipgloss.Color("#E8A87C")}
+	out := BlendForeground("GEARSHIFTER", base, stops)
+	if lipgloss.Width(out) != len("GEARSHIFTER") {
+		t.Errorf("gradient must not change width: %d", lipgloss.Width(out))
+	}
+	if !strings.Contains(out, "217;119;87") || !strings.Contains(out, "232;168;124") {
+		t.Errorf("gradient must reach both stops:\n%q", out)
 	}
 }
 

@@ -290,7 +290,8 @@ func (m Model) compositor() *lipgloss.Compositor {
 	// plus the footer hint line.
 	margin := strings.Repeat(" ", marginX)
 	base := make([]string, 0, tileRows+2)
-	base = append(base, margin+m.styles.Chrome.Wordmark.Render(" GEARSHIFTER "))
+	base = append(base, margin+theme.BlendForeground(" GEARSHIFTER ",
+		m.styles.Chrome.Wordmark, m.styles.Chrome.WordmarkBlend))
 	for len(base) < tileRows+1 {
 		base = append(base, "")
 	}

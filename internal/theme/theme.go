@@ -36,8 +36,9 @@ type Palette struct {
 	BgRaised  color.Color
 	BgHighest color.Color
 
-	Accent   color.Color // the house accent (focus, wordmark)
-	OnAccent color.Color // text on accent fills
+	Accent    color.Color // the house accent (focus, wordmark)
+	AccentAlt color.Color // the wordmark gradient's far stop (P4)
+	OnAccent  color.Color // text on accent fills
 
 	Border      color.Color // idle tile chrome
 	BorderFocus color.Color // focused tile chrome
@@ -106,11 +107,15 @@ type LauncherStyles struct {
 	Count      lipgloss.Style
 }
 
-// ChromeStyles renders the app shell around the tiles.
+// ChromeStyles renders the app shell around the tiles. WordmarkBlend
+// holds the stops of the deck's ONE gradient (P4, Crush recipe —
+// TUI-AESTHETICS.md §8): BlendForeground sweeps them across the
+// wordmark; nil means no gradient (plain).
 type ChromeStyles struct {
-	Wordmark lipgloss.Style
-	Footer   lipgloss.Style
-	Degraded lipgloss.Style // the canvas-too-small message
+	Wordmark      lipgloss.Style
+	WordmarkBlend []color.Color
+	Footer        lipgloss.Style
+	Degraded      lipgloss.Style // the canvas-too-small message
 }
 
 // ListStyles renders the palette screen (telescope + embedded).
@@ -162,9 +167,10 @@ func New(p Palette) *Styles {
 			Count:      fgMuted,
 		},
 		Chrome: ChromeStyles{
-			Wordmark: lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(p.Accent),
-			Footer:   fgMuted,
-			Degraded: fgMuted,
+			Wordmark:      lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(p.Accent),
+			WordmarkBlend: []color.Color{p.Accent, p.AccentAlt},
+			Footer:        fgMuted,
+			Degraded:      fgMuted,
 		},
 		List: ListStyles{
 			Prompt: lipgloss.NewStyle().Bold(true).Foreground(p.FgBase),
@@ -240,8 +246,9 @@ var placeholder = Palette{
 	BgRaised:  lipgloss.Color("#23232C"),
 	BgHighest: lipgloss.Color("#32323E"),
 
-	Accent:   lipgloss.Color("#D97757"),
-	OnAccent: lipgloss.Color("#17171E"),
+	Accent:    lipgloss.Color("#D97757"),
+	AccentAlt: lipgloss.Color("#E8A87C"),
+	OnAccent:  lipgloss.Color("#17171E"),
 
 	Border:      lipgloss.Color("#4B4B5A"),
 	BorderFocus: lipgloss.Color("#D97757"),
@@ -253,6 +260,24 @@ var placeholder = Palette{
 var themes = map[string]func() *Styles{
 	"default": func() *Styles { return New(placeholder) },
 	"plain":   Plain,
+}
+
+// BlendForeground renders s one rune at a time, sweeping the foreground
+// through the gradient stops while keeping base's attributes — under
+// Reverse this paints a gradient BLOCK (each cell's background takes
+// its rune's color). The deck's one gradient (P4). Fewer than two stops
+// (plain) renders base unchanged, byte-identical to base.Render.
+func BlendForeground(s string, base lipgloss.Style, stops []color.Color) string {
+	if len(stops) < 2 || s == "" {
+		return base.Render(s)
+	}
+	runes := []rune(s)
+	colors := lipgloss.Blend1D(len(runes), stops...)
+	var b strings.Builder
+	for i, r := range runes {
+		b.WriteString(base.Foreground(colors[i]).Render(string(r)))
+	}
+	return b.String()
 }
 
 // Load resolves a theme by name, failing with the available names — a
