@@ -1,0 +1,129 @@
+# Dense deck demo (2026-07-05): a 4×4 button field — the main field's
+# even split is 4 columns of span-2 buttons (8 = 2+2+2+2), four rows
+# deep, all real commands. "Squarer" tiles: ~11 cells wide at an 80-cell
+# popup. Labels truncate and nameplates degrade by design; if a plate
+# can't keep 4 cells the border goes plain. Eyeball with:
+#   just popup examples/dense.toml
+#
+# Needs ~30 popup rows (4 button rows + rail + launcher); bump
+# @gearshifter-height / -h if the deck reports the canvas too small.
+#
+# Shipped as the pinned dense example (Kyle-QA'd 2026-07-05); the
+# shipped default stays 2-col — density is opt-in (CS-008 staged flips).
+
+[[tile]]
+type    = "gear"
+command = "model"
+values  = ["haiku", "sonnet", "opus", "fable"]
+col     = 0
+span    = 5
+
+[[tile]]
+type    = "gear"
+command = "effort"
+values  = ["low", "medium", "high", "max"]
+col     = 0
+span    = 5
+
+[[tile]]
+type    = "button"
+command = "compact"
+col     = 5
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "copy"
+col     = 7
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "clear"
+col     = 9
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "context"
+col     = 11
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "goal"
+insert  = true
+col     = 5
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "radio"
+col     = 7
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "reload-plugins"
+label   = "RELOAD"
+col     = 9
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "resume"
+col     = 11
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "config"
+col     = 5
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "cost"
+col     = 7
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "doctor"
+col     = 9
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "export"
+col     = 11
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "hooks"
+col     = 5
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "mcp"
+col     = 7
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "permissions"
+label   = "PERMS"
+col     = 9
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "statusline"
+label   = "STATUS"
+col     = 11
+span    = 2
+
+[[tile]]
+type = "launcher"

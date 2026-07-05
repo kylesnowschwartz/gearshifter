@@ -146,6 +146,28 @@ func TestKyleLayoutLoads(t *testing.T) {
 	}
 }
 
+// dense.toml is the shipped density example: a 4×4 button field on the
+// main span's even split (4 × span-2). It must keep parsing and keep
+// its shape — 2 gears + 16 buttons + launcher.
+func TestDenseLayoutLoads(t *testing.T) {
+	placements, err := Load("../../examples/dense.toml", nil, agent.State{}, testStyles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(placements) != 19 {
+		t.Errorf("dense example: %d placements, want 19 (2 gears + 16 buttons + launcher)", len(placements))
+	}
+	buttons := 0
+	for _, p := range placements {
+		if _, ok := p.Tile.(widget.Button); ok {
+			buttons++
+		}
+	}
+	if buttons != 16 {
+		t.Errorf("dense example: %d buttons, want the 4×4 field", buttons)
+	}
+}
+
 // The gearSetting output-style → state.Style mapping outlived kyle.toml's
 // STYLE gear (a plugin /style command could revive it — DECK-CONTENT.md
 // postscript), so a user layout carrying one must still live-mark.
