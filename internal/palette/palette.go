@@ -168,10 +168,7 @@ func (m Model) View() tea.View {
 	v := tea.NewView(b.String())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
-	// Colored themes own the surface (nil = terminal default) — same
-	// contract as the deck view, so the launcher swap never color-pops.
-	v.BackgroundColor = m.styles.Background
-	v.ForegroundColor = m.styles.Foreground
+	m.styles.ApplySurface(&v)
 	return v
 }
 

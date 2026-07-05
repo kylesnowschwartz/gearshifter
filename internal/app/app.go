@@ -83,10 +83,7 @@ func (m Model) View() tea.View {
 	var view tea.View
 	view.AltScreen = true
 	view.MouseMode = tea.MouseModeCellMotion // requested from P0 so tmux never scrolls
-	// Colored themes own the popup surface (nil = terminal default);
-	// without this, FgBase text vanishes on light terminals.
-	view.BackgroundColor = m.styles.Background
-	view.ForegroundColor = m.styles.Foreground
+	m.styles.ApplySurface(&view)
 	if m.width == 0 {
 		return view
 	}

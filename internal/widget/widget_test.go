@@ -106,6 +106,9 @@ func TestTileRowsNeverExceedWidth(t *testing.T) {
 		NewGear(testStyles, catalog.Command{Name: "model"}, "MODEL",
 			[]string{"claude-fable-5-extended", "ok"}, 3),
 		NewButton(testStyles, catalog.Command{Name: "reload-plugins"}, "RELOAD", 3),
+		// Too narrow for label+count: the count drops all-or-nothing (the
+		// old box() path wrapped to a 4th row instead, desyncing Rows()=3).
+		NewLauncher(testStyles, 42, 3),
 	}
 	for _, tile := range tiles {
 		for _, line := range strings.Split(tile.View(RenderState{}, width), "\n") {

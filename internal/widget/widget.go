@@ -63,11 +63,58 @@ const (
 	borderCols = 2
 )
 
-// box renders bordered tile chrome around pre-styled content rows.
-// lipgloss v2 Style.Width is the TOTAL frame width (borders included) —
-// content rows get width-2 cells.
-func box(style lipgloss.Style, width int, rows ...string) string {
-	return style.Width(width).Render(strings.Join(rows, "\n"))
+// tileFrame is a tile's chrome resolved for one render: the charset and
+// border style the render state picked, plus the inner content width.
+// Every tile frames the same way — colored themes signal focus by border
+// color, plain by charset swap — so the pick and the edge assembly live
+// here, once. Border chars and content are styled as separate sequential
+// segments, never nested (M2 gotcha).
+type tileFrame struct {
+	chars lipgloss.Border
+	style lipgloss.Style
+	inner int
+}
+
+func newTileFrame(fs theme.FrameStyles, rs RenderState, width int) tileFrame {
+	chars, style := fs.Border, fs.Frame
+	if rs.Focused || rs.Armed {
+		chars, style = fs.BorderFocus, fs.FrameFocus
+	}
+	return tileFrame{chars: chars, style: style, inner: max(0, width-borderCols)}
+}
+
+// top renders a plain top border row: ┌────┐.
+func (f tileFrame) top() string {
+	return f.style.Render(f.chars.TopLeft + strings.Repeat(f.chars.Top, f.inner) + f.chars.TopRight)
+}
+
+// titledTop embeds pre-truncated text directly in the top border:
+// ┌ MODEL ───┐ (mock D chrome).
+func (f tileFrame) titledTop(title string) string {
+	return f.style.Render(f.chars.TopLeft + title +
+		strings.Repeat(f.chars.Top, max(0, f.inner-lipgloss.Width(title))) + f.chars.TopRight)
+}
+
+// bottom renders a plain bottom border row: └────┘.
+func (f tileFrame) bottom() string {
+	return f.style.Render(f.chars.BottomLeft + strings.Repeat(f.chars.Bottom, f.inner) + f.chars.BottomRight)
+}
+
+// nameplateBottom splices styled text between joint caps in the bottom
+// border: └┤ /compact ├──┘ (superfile's border-embedded info slot). The
+// plate must already fit within inner-nameplateJoints cells.
+func (f tileFrame) nameplateBottom(plate string, plateStyle lipgloss.Style) string {
+	w := lipgloss.Width(plate)
+	return f.style.Render(f.chars.BottomLeft+f.chars.MiddleRight) +
+		plateStyle.Render(plate) +
+		f.style.Render(f.chars.MiddleLeft+strings.Repeat(f.chars.Bottom, f.inner-w-nameplateJoints)+f.chars.BottomRight)
+}
+
+// row wraps one pre-styled, exactly-inner-wide content row in side
+// borders: │content│.
+func (f tileFrame) row(content string) string {
+	side := f.style.Render(f.chars.Left)
+	return side + content + side
 }
 
 // truncate cuts s to at most width display cells. Rune-count slicing
@@ -137,41 +184,30 @@ func (b Button) Activate() tea.Msg { return TileActivatedMsg{Command: b.Cmd, Ins
 func (b Button) Span() int         { return b.span }
 func (b Button) Rows() int         { return borderRows + buttonContentRows }
 
-// View hand-rolls the frame (like Gear) so the /command nameplate can
-// splice into the bottom border: └┤ /compact ├──┘. When the nameplate
-// can't fit, it degrades to a plain border (superfile's truncate-away
-// fallback).
+// View renders the frame with the /command nameplate spliced into the
+// bottom border: └┤ /compact ├──┘. When the nameplate can't fit, it
+// degrades to a plain border (superfile's truncate-away fallback).
 func (b Button) View(rs RenderState, width int) string {
 	st := b.styles.Button
-	chars, frame := st.Border, st.Frame
-	if rs.Focused || rs.Armed {
-		chars, frame = st.BorderFocus, st.FrameFocus
-	}
-	inner := width - borderCols
-	label := center(b.Label, inner)
+	f := newTileFrame(st.FrameStyles, rs, width)
+	label := center(b.Label, f.inner)
 	switch {
 	case rs.Armed:
-		label = st.LabelArmed.Render(label)
+		label = b.styles.Armed.Render(label)
 	case rs.Focused:
 		label = st.LabelFocus.Render(label)
 	default:
 		label = st.Label.Render(label)
 	}
-	side := frame.Render(chars.Left)
-	top := frame.Render(chars.TopLeft + strings.Repeat(chars.Top, max(0, inner)) + chars.TopRight)
 	// The nameplate truncates before it disappears: a button must show
 	// which command it fires (review finding — the old sublabel always
 	// did), so only a tile too narrow for any identity drops it.
-	plate := truncate(" /"+b.Cmd.Name+" ", max(0, inner-nameplateJoints))
-	var bottom string
-	if w := lipgloss.Width(plate); w >= nameplateMin {
-		bottom = frame.Render(chars.BottomLeft+chars.MiddleRight) +
-			st.Sub.Render(plate) +
-			frame.Render(chars.MiddleLeft+strings.Repeat(chars.Bottom, inner-w-nameplateJoints)+chars.BottomRight)
-	} else {
-		bottom = frame.Render(chars.BottomLeft + strings.Repeat(chars.Bottom, max(0, inner)) + chars.BottomRight)
+	plate := truncate(" /"+b.Cmd.Name+" ", max(0, f.inner-nameplateJoints))
+	bottom := f.bottom()
+	if lipgloss.Width(plate) >= nameplateMin {
+		bottom = f.nameplateBottom(plate, st.Sub)
 	}
-	return top + "\n" + side + label + side + "\n" + bottom
+	return f.top() + "\n" + f.row(label) + "\n" + bottom
 }
 
 // Gear selects one value of an enum command (gated column, locked UX
@@ -256,23 +292,12 @@ func (g Gear) ValueAt(rowInTile int) (int, bool) {
 	return i, i >= 0 && i < len(g.Values)
 }
 
-// View hand-rolls the box so the label embeds in the top border
-// (┌ MODEL ───┐, mock D chrome); the frame charset comes from the theme
-// (colored themes signal focus by border color alone, plain swaps to
-// the double charset). Border chars and the inner value line are styled
-// as separate sequential segments — never nested (M2 gotcha) — so the
-// frame can carry its own color.
+// View renders the frame with the label embedded in the top border
+// (┌ MODEL ───┐) over one row per value.
 func (g Gear) View(rs RenderState, width int) string {
 	st := g.styles.Gear
-	chars, frame := st.Border, st.Frame
-	if rs.Focused || rs.Armed {
-		chars, frame = st.BorderFocus, st.FrameFocus
-	}
-	side := frame.Render(chars.Left)
-	inner := width - borderCols
-	title := truncate(" "+g.Label+" ", max(0, inner))
-	rows := []string{frame.Render(chars.TopLeft + title +
-		strings.Repeat(chars.Top, max(0, inner-lipgloss.Width(title))) + chars.TopRight)}
+	f := newTileFrame(st.FrameStyles, rs, width)
+	rows := []string{f.titledTop(truncate(" "+g.Label+" ", f.inner))}
 	for i, val := range g.Values {
 		mark := theme.MarkBlank
 		if i == g.current {
@@ -281,11 +306,11 @@ func (g Gear) View(rs RenderState, width int) string {
 		// Truncate before padding: an over-wide value from a user
 		// layout.toml would bleed past the tile and desync the
 		// compositor's hit-testing (review finding).
-		line := truncate(mark+val, max(0, inner))
-		line += strings.Repeat(" ", max(0, inner-lipgloss.Width(line)))
+		line := truncate(mark+val, f.inner)
+		line += strings.Repeat(" ", max(0, f.inner-lipgloss.Width(line)))
 		switch {
 		case rs.Armed && i == g.cursor:
-			line = st.ValueArmed.Render(line)
+			line = g.styles.Armed.Render(line)
 		case rs.Focused && i == g.cursor:
 			line = st.ValueCursor.Render(line)
 		case i == g.current:
@@ -293,9 +318,9 @@ func (g Gear) View(rs RenderState, width int) string {
 		default:
 			line = st.Value.Render(line)
 		}
-		rows = append(rows, side+line+side)
+		rows = append(rows, f.row(line))
 	}
-	rows = append(rows, frame.Render(chars.BottomLeft+strings.Repeat(chars.Bottom, inner)+chars.BottomRight))
+	rows = append(rows, f.bottom())
 	return strings.Join(rows, "\n")
 }
 
@@ -320,17 +345,24 @@ func (l Launcher) Rows() int         { return borderRows + launcherContentRows }
 
 func (l Launcher) View(rs RenderState, width int) string {
 	st := l.styles.Launcher
-	inner := width - borderCols
-	label := " ALL COMMANDS…"
-	boxStyle := st.Box
-	if rs.Focused { // no armed frame: the launcher swaps screens, it doesn't fire
-		label = st.LabelFocus.Render(label)
-		boxStyle = st.BoxFocus
-	} else {
-		label = st.Label.Render(label)
+	// no armed frame: the launcher swaps screens, it doesn't fire
+	f := newTileFrame(st.FrameStyles, RenderState{Focused: rs.Focused}, width)
+	labelStyle := st.Label
+	if rs.Focused {
+		labelStyle = st.LabelFocus
 	}
+	label := " ALL COMMANDS…"
 	count := strconv.Itoa(l.Count) + " cmds "
-	gap := max(0, inner-lipgloss.Width(" ALL COMMANDS…")-lipgloss.Width(count))
-	line := label + strings.Repeat(" ", gap) + st.Count.Render(count)
-	return box(boxStyle, width, line)
+	// The count is all-or-nothing: when the bar is too narrow for both,
+	// the label wins and pads out alone — rows must never exceed the
+	// tile width (compositor hit-testing; the old box() path wrapped
+	// instead, silently breaking Rows()=3).
+	var line string
+	if gap := f.inner - lipgloss.Width(label) - lipgloss.Width(count); gap >= 0 {
+		line = labelStyle.Render(label) + strings.Repeat(" ", gap) + st.Count.Render(count)
+	} else {
+		label = truncate(label, f.inner)
+		line = labelStyle.Render(label) + strings.Repeat(" ", max(0, f.inner-lipgloss.Width(label)))
+	}
+	return f.top() + "\n" + f.row(line) + "\n" + f.bottom()
 }

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -58,6 +59,10 @@ type Styles struct {
 	Background color.Color
 	Foreground color.Color
 
+	// Armed is the ~150ms press-frame flash between fire and popup close
+	// (P2): one role, shared by every tile that fires.
+	Armed lipgloss.Style
+
 	Button   ButtonStyles
 	Gear     GearStyles
 	Launcher LauncherStyles
@@ -65,43 +70,41 @@ type Styles struct {
 	List     ListStyles
 }
 
-// ButtonStyles renders a button tile: one big centered label with the
-// /command spliced into the bottom border as a nameplate (superfile's
-// border-embedded info slot — promoted from experiment 2026-07-05), so
-// buttons hand-roll their frame like gears do. Armed is the ~150ms
-// press frame between fire and popup close (P2).
-type ButtonStyles struct {
-	Border      lipgloss.Border
-	BorderFocus lipgloss.Border
-	Frame       lipgloss.Style
-	FrameFocus  lipgloss.Style
-	Label       lipgloss.Style
-	LabelFocus  lipgloss.Style
-	LabelArmed  lipgloss.Style
-	Sub         lipgloss.Style // the nameplate text
+// FrameStyles is the chrome quartet every framed tile shares: border
+// charset + border-char style, idle and focused. The charset is a theme
+// decision: colored themes signal focus by border color alone (the
+// unanimous idiom, TUI-AESTHETICS.md §4); plain has no color to spend,
+// so it swaps to the double charset instead.
+type FrameStyles struct {
+	Border      lipgloss.Border // frame charset, idle
+	BorderFocus lipgloss.Border // frame charset, focused
+	Frame       lipgloss.Style  // border chars, idle
+	FrameFocus  lipgloss.Style  // border chars, focused
 }
 
-// GearStyles renders a gear tile: hand-rolled frame (title embedded in
-// the top border) over one row per value. Rows are styled once each —
-// nested styles reset ANSI mid-row (M2 gotcha). The frame charset is a
-// theme decision: colored themes signal focus by border color alone
-// (the unanimous idiom, TUI-AESTHETICS.md §4); plain has no color, so
-// it swaps to the double charset instead.
+// ButtonStyles renders a button tile: one big centered label with the
+// /command spliced into the bottom border as a nameplate (superfile's
+// border-embedded info slot — promoted from experiment 2026-07-05).
+type ButtonStyles struct {
+	FrameStyles
+	Label      lipgloss.Style
+	LabelFocus lipgloss.Style
+	Sub        lipgloss.Style // the nameplate text
+}
+
+// GearStyles renders a gear tile: framed title over one row per value.
+// Rows are styled once each — nested styles reset ANSI mid-row (M2
+// gotcha).
 type GearStyles struct {
-	Border       lipgloss.Border // frame charset, idle
-	BorderFocus  lipgloss.Border // frame charset, focused
-	Frame        lipgloss.Style  // border chars, idle
-	FrameFocus   lipgloss.Style  // border chars, focused
-	Value        lipgloss.Style  // plain value row
-	ValueCursor  lipgloss.Style  // j/k cursor row
-	ValueCurrent lipgloss.Style  // the session's live value (▐ mark row)
-	ValueArmed   lipgloss.Style  // the committed row during the press frame
+	FrameStyles
+	Value        lipgloss.Style // plain value row
+	ValueCursor  lipgloss.Style // j/k cursor row
+	ValueCurrent lipgloss.Style // the session's live value (▐ mark row)
 }
 
 // LauncherStyles renders the full-width launcher bar.
 type LauncherStyles struct {
-	Box        lipgloss.Style
-	BoxFocus   lipgloss.Style
+	FrameStyles
 	Label      lipgloss.Style
 	LabelFocus lipgloss.Style
 	Count      lipgloss.Style
@@ -132,39 +135,34 @@ type ListStyles struct {
 func New(p Palette) *Styles {
 	fgBase := lipgloss.NewStyle().Foreground(p.FgBase)
 	fgMuted := lipgloss.NewStyle().Foreground(p.FgMuted)
-	box := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(p.Border)
-	boxFocus := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(p.BorderFocus)
 	labelFocus := lipgloss.NewStyle().Foreground(p.Accent).Reverse(true)
-	armed := lipgloss.NewStyle().Bold(true).Foreground(p.OnAccent).Background(p.Accent)
+	frame := FrameStyles{
+		Border:      lipgloss.NormalBorder(),
+		BorderFocus: lipgloss.NormalBorder(),
+		Frame:       lipgloss.NewStyle().Foreground(p.Border),
+		FrameFocus:  lipgloss.NewStyle().Foreground(p.BorderFocus),
+	}
 	return &Styles{
 		Background: p.BgBase,
 		Foreground: p.FgBase,
+		Armed:      lipgloss.NewStyle().Bold(true).Foreground(p.OnAccent).Background(p.Accent),
 		Button: ButtonStyles{
-			Border:      lipgloss.NormalBorder(),
-			BorderFocus: lipgloss.NormalBorder(),
-			Frame:       lipgloss.NewStyle().Foreground(p.Border),
-			FrameFocus:  lipgloss.NewStyle().Foreground(p.BorderFocus),
+			FrameStyles: frame,
 			Label:       fgBase,
 			LabelFocus:  labelFocus,
-			LabelArmed:  armed,
 			Sub:         fgMuted,
 		},
 		Gear: GearStyles{
-			Border:       lipgloss.NormalBorder(),
-			BorderFocus:  lipgloss.NormalBorder(),
-			Frame:        lipgloss.NewStyle().Foreground(p.Border),
-			FrameFocus:   lipgloss.NewStyle().Foreground(p.BorderFocus),
+			FrameStyles:  frame,
 			Value:        lipgloss.NewStyle().Foreground(p.FgSubtle),
 			ValueCursor:  lipgloss.NewStyle().Reverse(true),
 			ValueCurrent: lipgloss.NewStyle().Bold(true).Foreground(p.Mark),
-			ValueArmed:   armed,
 		},
 		Launcher: LauncherStyles{
-			Box:        box,
-			BoxFocus:   boxFocus,
-			Label:      fgBase,
-			LabelFocus: labelFocus,
-			Count:      fgMuted,
+			FrameStyles: frame,
+			Label:       fgBase,
+			LabelFocus:  labelFocus,
+			Count:       fgMuted,
 		},
 		Chrome: ChromeStyles{
 			Wordmark:      lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(p.Accent),
@@ -190,34 +188,31 @@ func Plain() *Styles {
 	faint := lipgloss.NewStyle().Faint(true)
 	none := lipgloss.NewStyle()
 	reversed := lipgloss.NewStyle().Reverse(true)
-	armed := lipgloss.NewStyle().Reverse(true).Bold(true)
+	frame := FrameStyles{
+		Border:      lipgloss.NormalBorder(),
+		BorderFocus: lipgloss.DoubleBorder(),
+		Frame:       none,
+		FrameFocus:  none,
+	}
 	return &Styles{
+		Armed: lipgloss.NewStyle().Reverse(true).Bold(true),
 		Button: ButtonStyles{
-			Border:      lipgloss.NormalBorder(),
-			BorderFocus: lipgloss.DoubleBorder(),
-			Frame:       none,
-			FrameFocus:  none,
+			FrameStyles: frame,
 			Label:       none,
 			LabelFocus:  reversed,
-			LabelArmed:  armed,
 			Sub:         faint,
 		},
 		Gear: GearStyles{
-			Border:       lipgloss.NormalBorder(),
-			BorderFocus:  lipgloss.DoubleBorder(),
-			Frame:        none,
-			FrameFocus:   none,
+			FrameStyles:  frame,
 			Value:        none,
 			ValueCursor:  reversed,
 			ValueCurrent: lipgloss.NewStyle().Bold(true),
-			ValueArmed:   armed,
 		},
 		Launcher: LauncherStyles{
-			Box:        lipgloss.NewStyle().Border(lipgloss.NormalBorder()),
-			BoxFocus:   lipgloss.NewStyle().Border(lipgloss.DoubleBorder()),
-			Label:      none,
-			LabelFocus: reversed,
-			Count:      faint,
+			FrameStyles: frame,
+			Label:       none,
+			LabelFocus:  reversed,
+			Count:       faint,
 		},
 		Chrome: ChromeStyles{
 			Wordmark: lipgloss.NewStyle().Bold(true).Reverse(true),
@@ -231,6 +226,15 @@ func Plain() *Styles {
 			Badge:  faint,
 		},
 	}
+}
+
+// ApplySurface stamps the theme's popup surface onto a view: colored
+// themes own their canvas (nil = terminal default, the plain path) —
+// without this, FgBase text vanishes on light terminals. Every screen's
+// View must route through here so a swap never color-pops.
+func (s *Styles) ApplySurface(v *tea.View) {
+	v.BackgroundColor = s.Background
+	v.ForegroundColor = s.Foreground
 }
 
 // placeholder is the P1 stand-in palette: neutral charcoal ramps plus
