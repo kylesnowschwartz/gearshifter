@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -272,6 +273,120 @@ func TestEmptyDeckNeverPanics(t *testing.T) {
 	m = updated.(Model)
 	if _, ok := m.Selection(); ok {
 		t.Error("empty deck must select nothing")
+	}
+}
+
+// Persistent (strip) mode tests — STRIP-EMBED.md step 1. The riskiest
+// assumption: the program must survive every fire, delivering mid-loop
+// through the injector instead of quitting.
+
+type firedCall struct {
+	name       string
+	arg        string
+	insertOnly bool
+}
+
+func persistentModel(fired *[]firedCall) Model {
+	return newTestModel().Persistent(func(cmd catalog.Command, arg string, insertOnly bool) error {
+		*fired = append(*fired, firedCall{cmd.Name, arg, insertOnly})
+		return nil
+	}, nil)
+}
+
+func TestPersistentFireDeliversAndStaysAlive(t *testing.T) {
+	var fired []firedCall
+	m := persistentModel(&fired)
+
+	m = press(m, "l", "l", "enter") // fire COMPACT, armed
+	updated, cmd := m.Update(pressFrameDoneMsg{})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Error("persistent press frame must not quit")
+	}
+	if len(fired) != 1 || fired[0].name != "compact" {
+		t.Fatalf("fired = %+v, want one compact delivery", fired)
+	}
+	if _, ok := m.Selection(); ok || m.armed {
+		t.Error("delivery must clear the selection and disarm")
+	}
+	if !strings.Contains(m.View().Content, "→ /compact") {
+		t.Error("the footer must confirm the fire")
+	}
+
+	// The strip outlives the fire: a second tile fires again.
+	m = press(m, "l", "enter") // COPY
+	updated, _ = m.Update(pressFrameDoneMsg{})
+	m = updated.(Model)
+	if len(fired) != 2 || fired[1].name != "copy" {
+		t.Errorf("second fire = %+v, want copy appended", fired)
+	}
+}
+
+func TestPersistentGearFireCarriesValue(t *testing.T) {
+	var fired []firedCall
+	m := press(persistentModel(&fired), "j", "enter") // MODEL: haiku → sonnet
+	updated, _ := m.Update(pressFrameDoneMsg{})
+	_ = updated.(Model)
+	if len(fired) != 1 || fired[0].name != "model" || fired[0].arg != "sonnet" {
+		t.Errorf("gear fire = %+v, want model/sonnet", fired)
+	}
+}
+
+func TestPersistentInjectErrorLandsInFooter(t *testing.T) {
+	m := newTestModel().Persistent(func(catalog.Command, string, bool) error {
+		return fmt.Errorf("no Claude pane in this window")
+	}, nil)
+	m = press(m, "l", "l", "enter")
+	updated, _ := m.Update(pressFrameDoneMsg{})
+	m = updated.(Model)
+	if !strings.Contains(m.View().Content, "no Claude pane in this window") {
+		t.Error("an inject failure must fail with words in the footer")
+	}
+}
+
+func TestPersistentPaletteSelectionDeliversAndReturnsToDeck(t *testing.T) {
+	var fired []firedCall
+	m := press(persistentModel(&fired), "/", "c", "t", "x", "enter")
+	if m.screen != screenDeck {
+		t.Error("palette delivery must land back on the deck")
+	}
+	if len(fired) != 1 || fired[0].name != "context" {
+		t.Errorf("palette fire = %+v, want context", fired)
+	}
+	if _, ok := m.Selection(); ok {
+		t.Error("delivery must clear the selection")
+	}
+}
+
+func TestPersistentRefreshRemarksGears(t *testing.T) {
+	m := newTestModel().Persistent(
+		func(catalog.Command, string, bool) error { return nil },
+		func() map[string]string { return nil })
+	if m.Init() == nil {
+		t.Fatal("persistent mode must schedule the refresh tick")
+	}
+	if newTestModel().Init() != nil {
+		t.Fatal("popup mode must not tick")
+	}
+
+	updated, cmd := m.Update(stateRefreshMsg{"model": "opus", "effort": "high"})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Error("a refresh must schedule the next tick")
+	}
+	content := m.View().Content
+	if !strings.Contains(content, "▐ opus") || !strings.Contains(content, "▐ high") {
+		t.Errorf("refresh must re-mark the gears:\n%s", content)
+	}
+
+	// An unchanged poll is a no-op: it must not snap a mid-navigation
+	// gear cursor back to current (idle ticks fire every few seconds).
+	m = press(m, "j") // move MODEL's cursor off the current value
+	before := m.View().Content
+	updated, _ = m.Update(stateRefreshMsg{"model": "opus", "effort": "high"})
+	m = updated.(Model)
+	if m.View().Content != before {
+		t.Error("an unchanged refresh must not touch the deck")
 	}
 }
 

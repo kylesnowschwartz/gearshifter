@@ -102,3 +102,20 @@ func TestStateSurvivesTranscriptDrift(t *testing.T) {
 		t.Errorf("got model %q, want claude-fable-5 (synthetic skipped, drift-typed fields tolerated)", s.Model)
 	}
 }
+
+// HasSession is strip mode's pane-scan predicate: the same registry
+// resolution State uses, as a yes/no. Fail-open like everything here —
+// no registry entry (or no root at all) means false, never an error.
+func TestHasSession(t *testing.T) {
+	root := writeSettings(t, `{}`)
+	writeRegistryEntry(t, root, "s1", "/proj")
+	if !NewAt(root).HasSession(0, "/proj") {
+		t.Error("a registered pane must report a session")
+	}
+	if NewAt(root).HasSession(0, "/nowhere") {
+		t.Error("an unregistered pane must not report a session")
+	}
+	if (Claude{}).HasSession(0, "/proj") {
+		t.Error("a zero-root provider must degrade to false")
+	}
+}

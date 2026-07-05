@@ -19,6 +19,11 @@ type State struct {
 // target pane, identified by the pane's shell pid and working directory.
 // Implementations degrade to the zero State instead of erroring — the
 // deck never blocks on state.
+//
+// HasSession reports whether a live agent session is resolvable for a
+// pane at all — strip mode scans a window's panes with it to find its
+// injection target. Like State, it degrades to false instead of erroring.
 type Provider interface {
 	State(panePID int, paneCwd string) State
+	HasSession(panePID int, paneCwd string) bool
 }

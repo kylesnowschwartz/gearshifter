@@ -98,3 +98,27 @@ func TestPanePID(t *testing.T) {
 		t.Error("garbage pid output must error")
 	}
 }
+
+func TestWindowPanes(t *testing.T) {
+	r := &cannedRunner{out: "%0\t100\t/home/a\n%2\t200\t/home/b"}
+	panes, err := NewClient(r).WindowPanes("%0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Pane{{ID: "%0", PID: 100, Cwd: "/home/a"}, {ID: "%2", PID: 200, Cwd: "/home/b"}}
+	if !reflect.DeepEqual(panes, want) {
+		t.Errorf("WindowPanes = %+v, want %+v", panes, want)
+	}
+	if got := strings.Join(r.lastArgs, " "); got != "list-panes -t %0 -F #{pane_id}\t#{pane_pid}\t#{pane_current_path}" {
+		t.Errorf("argv = %q", got)
+	}
+}
+
+func TestWindowPanesBadRowsError(t *testing.T) {
+	if _, err := NewClient(&cannedRunner{out: "%0\tnot-a-pid\t/x"}).WindowPanes("%0"); err == nil {
+		t.Error("garbage pid must error")
+	}
+	if _, err := NewClient(&cannedRunner{out: "one-field-only"}).WindowPanes("%0"); err == nil {
+		t.Error("short row must error")
+	}
+}

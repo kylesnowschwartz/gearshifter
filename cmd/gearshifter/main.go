@@ -37,6 +37,7 @@ const usage = `gearshifter — a tmux control deck for Claude Code slash command
 
 Usage:
   gearshifter pick --pane PANE [--cwd DIR] [--sources ...] [--layout NAME] [--theme NAME]
+  gearshifter strip [--pane PANE] [--cwd DIR] [--sources ...] [--layout NAME] [--theme NAME]
   gearshifter list [--cwd DIR] [--sources user,project,builtin,plugin]
   gearshifter inject --pane PANE [--no-enter] [--no-clear] TEXT
   gearshifter version
@@ -48,6 +49,11 @@ Subcommands:
            the default), telescope (fullscreen searchable palette), or a
            path to a layout.toml (see examples/layout.toml). --theme
            picks the color theme: default, or plain (no color).
+  strip    Run the deck as a persistent pane widget: the UI stays open
+           across fires, injecting each fired tile into the window's
+           Claude pane — auto-detected at fire time, or pinned with
+           --pane — and re-polling gear state every few seconds.
+           Same --layout choices as pick, minus telescope.
   list     Print the available slash commands as TSV: name, source,
            argument hint, description. Default sources are
            user,project,builtin; add plugin explicitly to include
@@ -66,6 +72,8 @@ func main() {
 	switch os.Args[1] {
 	case "pick":
 		err = runPick(os.Args[2:])
+	case "strip":
+		err = runStrip(os.Args[2:])
 	case "list":
 		err = runList(os.Args[2:])
 	case "inject":
@@ -185,6 +193,122 @@ func runPick(args []string) error {
 		return nil // cancelled: zero side effects
 	}
 	return injectSelection(client, *pane, pick)
+}
+
+// runStrip runs the deck as a persistent pane widget (STRIP-EMBED.md
+// step 1). Unlike pick, there is no quit-then-inject handoff: the app
+// stays alive and delivers each selection mid-loop through an injector
+// composed here, so widget/app still never import tmux. The target is
+// re-resolved at every fire — panes come and go under a long-lived strip.
+func runStrip(args []string) error {
+	fs := flag.NewFlagSet("strip", flag.ExitOnError)
+	pane := fs.String("pane", "", "pin the target pane id (e.g. %12); default: scan this window for a Claude pane at fire time")
+	cwd := fs.String("cwd", "", "directory for project-scoped commands; defaults to the target pane's cwd")
+	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
+	layoutName := fs.String("layout", defaultLayout, "UI layout: deck or a path to a layout.toml (telescope quits on selection — not strip-compatible)")
+	themeName := fs.String("theme", "default", "color theme: default, or plain (no color)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *layoutName == layoutTelescope {
+		return fmt.Errorf("strip: telescope quits on selection; strip needs a deck-shaped layout")
+	}
+	_, layoutPath, err := resolveLayout(*layoutName)
+	if err != nil {
+		return err
+	}
+	styles, err := theme.Load(*themeName)
+	if err != nil {
+		return fmt.Errorf("strip: %w", err)
+	}
+	if os.Getenv("TMUX") == "" {
+		return fmt.Errorf("strip: must run inside tmux (split a pane and run it there)")
+	}
+
+	client := tmux.NewClient(nil)
+	var provider agent.Provider = claude.New()
+	resolve := stripTarget(client, provider, *pane, os.Getenv("TMUX_PANE"))
+
+	// Startup snapshot: the initial gear state, and the target's cwd for
+	// project-scoped commands. A missing target is fine here — the strip
+	// opens stateless and the refresh tick picks the state up once a
+	// Claude pane exists.
+	var state agent.State
+	catalogCwd := *cwd
+	if target, err := resolve(); err == nil {
+		state = provider.State(target.PID, target.Cwd)
+		if catalogCwd == "" {
+			catalogCwd = target.Cwd
+		}
+	}
+	cmds, err := buildCatalog(catalogCwd, *sources)
+	if err != nil {
+		return err
+	}
+	placements := layout.Default(cmds, state, styles)
+	if layoutPath != "" {
+		placements, err = layout.Load(layoutPath, cmds, state, styles)
+		if err != nil {
+			return fmt.Errorf("strip: %w", err)
+		}
+	}
+
+	inject := func(cmd catalog.Command, arg string, insertOnly bool) error {
+		target, err := resolve()
+		if err != nil {
+			return err
+		}
+		text, opts := buildInjection(selection{cmd: cmd, arg: arg, insertOnly: insertOnly})
+		return client.Inject(target.ID, text, opts)
+	}
+	refresh := func() map[string]string {
+		target, err := resolve()
+		if err != nil {
+			return nil
+		}
+		return layout.GearSettings(provider.State(target.PID, target.Cwd))
+	}
+	if _, err := tea.NewProgram(app.New(cmds, placements, styles).Persistent(inject, refresh)).Run(); err != nil {
+		return fmt.Errorf("strip: %w", err)
+	}
+	return nil
+}
+
+// stripTarget returns strip mode's per-fire target resolver. An explicit
+// pane pin wins — existence-checked at fire time, not startup, because
+// panes die under a long-lived strip. Otherwise the window containing
+// self is scanned in index order for the first other pane running a
+// resolvable Claude session.
+func stripTarget(client *tmux.Client, provider agent.Provider, explicit, self string) func() (tmux.Pane, error) {
+	return func() (tmux.Pane, error) {
+		if explicit != "" {
+			if !client.PaneExists(explicit) {
+				return tmux.Pane{}, fmt.Errorf("target pane %s is gone", explicit)
+			}
+			pid, err := client.PanePID(explicit)
+			if err != nil {
+				return tmux.Pane{}, err
+			}
+			cwd, err := client.PaneCwd(explicit)
+			if err != nil {
+				return tmux.Pane{}, err
+			}
+			return tmux.Pane{ID: explicit, PID: pid, Cwd: cwd}, nil
+		}
+		panes, err := client.WindowPanes(self)
+		if err != nil {
+			return tmux.Pane{}, err
+		}
+		for _, p := range panes {
+			if p.ID == self {
+				continue
+			}
+			if provider.HasSession(p.PID, p.Cwd) {
+				return p, nil
+			}
+		}
+		return tmux.Pane{}, fmt.Errorf("no Claude pane in this window")
+	}
 }
 
 // resolveLayout classifies --layout as an inbuilt name (telescope, deck)

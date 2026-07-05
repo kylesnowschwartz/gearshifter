@@ -9,6 +9,7 @@ package claude
 
 import (
 	"github.com/kylesnowschwartz/agent-ouija/claude/claudedir"
+	"github.com/kylesnowschwartz/agent-ouija/claude/registry"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
 )
@@ -47,4 +48,16 @@ func (c Claude) State(panePID int, paneCwd string) agent.State {
 		return agent.State{}
 	}
 	return sessionState(c.root, panePID, paneCwd)
+}
+
+// HasSession implements agent.Provider: true when the pane resolves to a
+// live entry in Claude Code's sessions registry — the same resolution
+// State uses for session-specific model, exposed as a yes/no so strip
+// mode can pick its injection target.
+func (c Claude) HasSession(panePID int, paneCwd string) bool {
+	if c.root == "" {
+		return false
+	}
+	_, ok := registry.ResolvePane(c.root.SessionsDir(), panePID, paneCwd)
+	return ok
 }

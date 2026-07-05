@@ -179,6 +179,51 @@ host_screen | rg -q 'GEARSHIFTER' && ok "prefix+C-g opens the deck" || bad "pref
 send_host Escape
 sleep 0.5
 
+echo "13. strip: persistent pane widget fires repeatedly and stays alive"
+# Step 8 already injected /compact into the origin; clear its screen so
+# this step's assertion can't match residue. The strip pins --pane
+# explicitly: registry pane-resolution can't work on the throwaway
+# server (auto-scan policy is unit-tested in main_test.go instead).
+tmux -L "$SOCK" send-keys -t rig "clear" Enter
+sleep 0.5
+# Split BELOW at full width: the 4×4 deck needs ~24 rows but also full
+# columns (a half-width pane truncates span-2 labels and breaks the
+# grep), and the origin keeps 100 cols so error lines never wrap.
+STRIP=$(tmux -L "$SOCK" split-window -v -l 24 -P -F '#{pane_id}' -t rig \
+  "$PWD/bin/gearshifter strip --pane $ORIGIN --cwd $PWD")
+sleep 1.5
+host_screen | rg -q 'GEARSHIFTER' && ok "strip opens in a pane" || bad "strip opens in a pane"
+SCREEN=$(host_screen)
+ROW=$(echo "$SCREEN" | grep -n 'COMPACT' | head -1 | cut -d: -f1 || true)
+if [ -z "$ROW" ]; then bad "strip fire (COMPACT not found)"; else
+  LINE=$(echo "$SCREEN" | sed -n "${ROW}p")
+  PREFIX=${LINE%%COMPACT*}
+  click_at $(( ${#PREFIX} + 3 )) "$ROW"
+  sleep 1.5
+  # origin_screen targets the session's ACTIVE pane — the strip now; the
+  # origin must be captured by id.
+  tmux -L "$SOCK" capture-pane -p -t "$ORIGIN" | rg -q 'no such file.*compact' \
+    && ok "strip fire lands in origin" || bad "strip fire lands in origin"
+fi
+host_screen | rg -q 'GEARSHIFTER' && ok "strip survives the fire" || bad "strip survives the fire"
+SCREEN=$(host_screen)
+ROW=$(echo "$SCREEN" | grep -n 'COPY' | head -1 | cut -d: -f1 || true)
+if [ -z "$ROW" ]; then bad "strip second fire (COPY not found)"; else
+  LINE=$(echo "$SCREEN" | sed -n "${ROW}p")
+  PREFIX=${LINE%%COPY*}
+  click_at $(( ${#PREFIX} + 2 )) "$ROW"
+  sleep 1.5
+  tmux -L "$SOCK" capture-pane -p -t "$ORIGIN" | rg -q 'no such file.*copy' \
+    && ok "strip fires again" || bad "strip fires again"
+fi
+send_host q # the click made the strip pane active; q quits the program
+sleep 1
+if tmux -L "$SOCK" list-panes -t rig -F '#{pane_id}' | rg -q "$STRIP"; then
+  bad "q closes the strip"
+else
+  ok "q closes the strip"
+fi
+
 echo
 echo "popup-rig: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

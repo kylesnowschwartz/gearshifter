@@ -186,19 +186,21 @@ func spanOf(t tomlTile, defaultSpan int) (int, error) {
 	return span, nil
 }
 
-// gearSetting maps a gear's command to the session state that marks its
-// current value — the ONE binding site between command names and
-// agent.State fields (Default and Load both route through it). Gears for
-// other enum commands render stateless — honest until an agent.Provider
-// learns their state.
-func gearSetting(name string, state agent.State) string {
-	switch name {
-	case "model":
-		return state.Model
-	case "effort":
-		return state.Effort
-	case "output-style":
-		return state.Style
+// GearSettings maps gear command names to the session state that marks
+// their current value — the ONE binding site between command names and
+// agent.State fields (Default, Load, and strip mode's refresh all route
+// through it). Gears for command names absent here render stateless —
+// honest until an agent.Provider learns their state.
+func GearSettings(state agent.State) map[string]string {
+	return map[string]string{
+		"model":        state.Model,
+		"effort":       state.Effort,
+		"output-style": state.Style,
 	}
-	return ""
+}
+
+// gearSetting is the single-gear lookup Default and Load use at
+// construction time.
+func gearSetting(name string, state agent.State) string {
+	return GearSettings(state)[name]
 }

@@ -127,3 +127,38 @@ func (c *Client) DisplayMessage(text string) error {
 	_, err := c.run.Run("", "display-message", text)
 	return err
 }
+
+// Pane is one row of a window's pane listing — what strip-mode target
+// resolution scans (id to inject into, pid+cwd to ask the agent provider
+// about).
+type Pane struct {
+	ID  string
+	PID int
+	Cwd string
+}
+
+// WindowPanes lists the panes of the window containing pane, in tmux
+// index order.
+func (c *Client) WindowPanes(pane string) ([]Pane, error) {
+	out, err := c.run.Run("", "list-panes", "-t", pane, "-F",
+		"#{pane_id}\t#{pane_pid}\t#{pane_current_path}")
+	if err != nil {
+		return nil, err
+	}
+	var panes []Pane
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.SplitN(line, "\t", 3)
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("list-panes: bad row %q", line)
+		}
+		pid, err := strconv.Atoi(fields[1])
+		if err != nil {
+			return nil, fmt.Errorf("pane %s: bad pid %q", fields[0], fields[1])
+		}
+		panes = append(panes, Pane{ID: fields[0], PID: pid, Cwd: fields[2]})
+	}
+	return panes, nil
+}
