@@ -127,26 +127,37 @@ func TestLoadErrorsNameTheLine(t *testing.T) {
 }
 
 // kyle.toml is a personal layout, not Default-pinned — but it must
-// always parse, and its insert/style-gear features must hold.
+// always parse, and its insert feature must hold. (Its STYLE gear was
+// removed 2026-07-05: Claude Code dropped /output-style and /config
+// rejects custom styles non-interactively — DECK-CONTENT.md postscript.)
 func TestKyleLayoutLoads(t *testing.T) {
-	placements, err := Load("../../examples/kyle.toml", nil, agent.State{Style: "mayo-clinic"}, testStyles)
+	placements, err := Load("../../examples/kyle.toml", nil, agent.State{}, testStyles)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var goal widget.Button
-	var style widget.Gear
 	for _, p := range placements {
 		if b, ok := p.Tile.(widget.Button); ok && b.Cmd.Name == "goal" {
 			goal = b
-		}
-		if g, ok := p.Tile.(widget.Gear); ok && g.Label == "STYLE" {
-			style = g
 		}
 	}
 	if !goal.Insert {
 		t.Error("GOAL must be an insert-only button (always takes a condition)")
 	}
-	if view := style.View(widget.RenderState{}, 24); !strings.Contains(view, "▐ mayo-clinic") {
+}
+
+// The gearSetting output-style → state.Style mapping outlived kyle.toml's
+// STYLE gear (a plugin /style command could revive it — DECK-CONTENT.md
+// postscript), so a user layout carrying one must still live-mark.
+func TestStyleGearMarksLiveOutputStyle(t *testing.T) {
+	placements, err := Load(writeLayout(t,
+		"[[tile]]\ntype = \"gear\"\ncommand = \"output-style\"\nlabel = \"STYLE\"\nvalues = [\"mayo-clinic\", \"other\"]"),
+		nil, agent.State{Style: "mayo-clinic"}, testStyles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := placements[0].Tile.View(widget.RenderState{}, 24)
+	if !strings.Contains(view, "▐ mayo-clinic") {
 		t.Errorf("STYLE gear must mark the live output style:\n%s", view)
 	}
 }
