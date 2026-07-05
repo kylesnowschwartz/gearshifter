@@ -151,6 +151,7 @@ func runPick(args []string) error {
 	}
 
 	var sel catalog.Command
+	var arg string
 	var ok, insertOnly bool
 	switch *layout {
 	case layoutDeck:
@@ -160,6 +161,7 @@ func runPick(args []string) error {
 		}
 		model := final.(app.Model)
 		sel, ok = model.Selection()
+		arg = model.Arg()
 		insertOnly = model.InsertOnly()
 	default: // telescope
 		final, err := tea.NewProgram(palette.New(cmds)).Run()
@@ -173,16 +175,7 @@ func runPick(args []string) error {
 	if !ok {
 		return nil // cancelled: zero side effects
 	}
-	// Hint-aware Enter policy: commands with a required argument (`<...>`
-	// hint) are inserted with a trailing space, ready for typing, instead
-	// of submitted bare (which misfires — e.g. /btw with no question).
-	// Tab requests the same insert-only treatment explicitly.
-	text := "/" + sel.Name
-	opts := tmux.InjectOptions{}
-	if sel.RequiresArgument() || insertOnly {
-		text += " "
-		opts.NoEnter = true
-	}
+	text, opts := buildInjection(sel, arg, insertOnly)
 	// The target can die while the palette is open. Popup stderr is
 	// invisible, so surface failures in the tmux status line instead.
 	if !client.PaneExists(*pane) {
@@ -194,6 +187,23 @@ func runPick(args []string) error {
 		return fmt.Errorf("pick: %w", err)
 	}
 	return nil
+}
+
+// buildInjection turns a selection into the exact injected text. Hint-aware
+// Enter policy (D2): commands with a required argument (`<...>` hint) are
+// inserted with a trailing space, ready for typing, instead of submitted
+// bare (which misfires — e.g. /btw with no question); insertOnly (Tab)
+// requests the same treatment explicitly. A gear value satisfies the
+// argument itself — "/model opus", always-enter.
+func buildInjection(sel catalog.Command, arg string, insertOnly bool) (string, tmux.InjectOptions) {
+	text := "/" + sel.Name
+	switch {
+	case arg != "":
+		return text + " " + arg, tmux.InjectOptions{}
+	case sel.RequiresArgument() || insertOnly:
+		return text + " ", tmux.InjectOptions{NoEnter: true}
+	}
+	return text, tmux.InjectOptions{}
 }
 
 func runInject(args []string) error {
