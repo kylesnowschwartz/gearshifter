@@ -29,19 +29,18 @@ var (
 	faint    = lipgloss.NewStyle().Faint(true)
 )
 
-// placement puts a tile at a grid column; rows stack in slice order within
-// their zone (rail or main). All geometry flows from deck.Grid — Samara's
-// law: tiles are placed by the system, never nudged.
+// placement puts a tile at a grid column and row. All geometry flows from
+// deck.Grid and the Fibonacci scale — Samara's law: tiles are placed by
+// the system, never nudged.
 type placement struct {
 	tile widget.Tile
 	col  int
+	y    int
 }
 
 // Model routes between the deck screen and the embedded palette.
 type Model struct {
 	commands []catalog.Command
-	rail     []placement // launcher now; gears in P2
-	main     []placement // buttons, two per row
 	order    []*placement
 	focus    int
 
@@ -51,38 +50,39 @@ type Model struct {
 	height  int
 
 	selected   *catalog.Command
+	arg        string
 	insertOnly bool
 }
 
-// New builds the default deck layout from the catalog: launcher rail
-// (span 5) beside a 2×2 button field (span 4 each) — the φ split.
-// The gears claim the rail in M3 P2; the launcher then drops to a bar.
+// New builds the default deck layout from the catalog: gear rail (span 5,
+// MODEL over EFFORT) beside a 2×2 button field (span 4 each) — the φ
+// split — with the launcher as a full-width bottom bar. Focus order =
+// reading order.
 func New(commands []catalog.Command) Model {
 	m := Model{commands: commands}
-	buttonRows := 2
-	launcherRows := buttonRows*4 + 1 // match the button block height (4-row tiles + gutter)
-	m.rail = []placement{
-		{tile: widget.NewLauncher(len(commands), deck.RailSpan, launcherRows), col: 0},
+	add := func(t widget.Tile, col, y int) {
+		m.order = append(m.order, &placement{tile: t, col: col, y: y})
 	}
+
+	model := widget.NewGear(findCommand(commands, "model"), "MODEL",
+		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan)
+	effort := widget.NewGear(findCommand(commands, "effort"), "EFFORT",
+		[]string{"low", "medium", "high", "max"}, deck.RailSpan)
+	add(model, 0, bodyY)
+	add(effort, 0, bodyY+model.Rows()+rowGap)
+
 	for i, b := range []struct{ name, label string }{
 		{"review", "REVIEW"},
 		{"context", "CONTEXT"},
 		{"compact", "COMPACT"},
 		{"resume", "RESUME"},
 	} {
-		cmd := findCommand(commands, b.name)
-		m.main = append(m.main, placement{
-			tile: widget.NewButton(cmd, b.label, deck.MainSpan/2),
-			col:  deck.RailSpan + (i%2)*(deck.MainSpan/2),
-		})
+		btn := widget.NewButton(findCommand(commands, b.name), b.label, deck.MainSpan/2)
+		add(btn, deck.RailSpan+(i%2)*(deck.MainSpan/2), bodyY+(i/2)*(btn.Rows()+rowGap))
 	}
-	// Focus order = reading order: launcher, then buttons.
-	for i := range m.rail {
-		m.order = append(m.order, &m.rail[i])
-	}
-	for i := range m.main {
-		m.order = append(m.order, &m.main[i])
-	}
+
+	railH := model.Rows() + rowGap + effort.Rows()
+	add(widget.NewLauncher(len(commands), deck.Columns), 0, bodyY+railH+rowGap)
 	return m
 }
 
@@ -105,6 +105,10 @@ func (m Model) Selection() (catalog.Command, bool) {
 	}
 	return *m.selected, true
 }
+
+// Arg returns the gear value committed with the selection, if any — the
+// injection becomes "/command value".
+func (m Model) Arg() string { return m.arg }
 
 // InsertOnly reports whether the selection asked to skip Enter.
 func (m Model) InsertOnly() bool { return m.insertOnly }
@@ -129,11 +133,23 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Named-layer hit-testing (M2 P0 decision): the compositor knows
 		// every tile's bounds; a hit both focuses and fires — click = do.
-		if i, ok := hitTile(m.compositor().Hit(msg.X, msg.Y)); ok && i < len(m.order) {
-			m.focus = i
-			return m.activate(m.order[i].tile.Activate())
+		hit := m.compositor().Hit(msg.X, msg.Y)
+		i, ok := hitTile(hit)
+		if !ok || i >= len(m.order) {
+			return m, nil
 		}
-		return m, nil
+		m.focus = i
+		if g, isGear := m.order[i].tile.(widget.Gear); isGear {
+			// Gated column: each value row is its own target — one click
+			// to any state. Border/label clicks just focus.
+			if v, ok := g.ValueAt(msg.Y - hit.Bounds().Min.Y); ok {
+				g = g.WithCursor(v)
+				m.order[i].tile = g
+				return m.activate(g.Activate())
+			}
+			return m, nil
+		}
+		return m.activate(m.order[i].tile.Activate())
 	case tea.MouseWheelMsg:
 		switch msg.Button {
 		case tea.MouseWheelDown:
@@ -152,10 +168,24 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "enter":
 		return m.activate(m.order[m.focus].tile.Activate())
-	case "left", "h", "up", "k", "shift+tab":
+	case "left", "h", "shift+tab":
 		m.focus = (m.focus - 1 + len(m.order)) % len(m.order)
-	case "right", "l", "down", "j", "tab":
+	case "right", "l", "tab":
 		m.focus = (m.focus + 1) % len(m.order)
+	case "down", "j":
+		// j/k walk the gated column inside a focused gear; between tiles
+		// otherwise (h/l always move between tiles — mock D interactions).
+		if g, ok := m.order[m.focus].tile.(widget.Gear); ok {
+			m.order[m.focus].tile = g.CursorNext()
+			return m, nil
+		}
+		m.focus = (m.focus + 1) % len(m.order)
+	case "up", "k":
+		if g, ok := m.order[m.focus].tile.(widget.Gear); ok {
+			m.order[m.focus].tile = g.CursorPrev()
+			return m, nil
+		}
+		m.focus = (m.focus - 1 + len(m.order)) % len(m.order)
 	case "/":
 		return m.openPalette()
 	}
@@ -169,6 +199,11 @@ func (m Model) activate(intent tea.Msg) (tea.Model, tea.Cmd) {
 	case widget.TileActivatedMsg:
 		sel := intent.Command
 		m.selected = &sel
+		return m, tea.Quit
+	case widget.GearShiftedMsg:
+		sel := intent.Command
+		m.selected = &sel
+		m.arg = intent.Value
 		return m, tea.Quit
 	case widget.ScreenRequestedMsg:
 		return m.openPalette()
@@ -240,13 +275,9 @@ func (m Model) compositor() *lipgloss.Compositor {
 	layers := make([]*lipgloss.Layer, 0, len(m.order)+1)
 	for i, p := range m.order {
 		x, w := grid.Cell(p.col, p.tile.Span())
-		y := bodyY
-		if row := m.mainRow(p); row >= 0 {
-			y += row * (p.tile.Rows() + rowGap)
-		}
 		layers = append(layers, lipgloss.NewLayer(p.tile.View(i == m.focus, w)).
-			ID("tile:"+strconv.Itoa(i)).X(marginX+x).Y(y).Z(1))
-		if bottom := y + p.tile.Rows(); bottom > tileRows {
+			ID("tile:"+strconv.Itoa(i)).X(marginX+x).Y(p.y).Z(1))
+		if bottom := p.y + p.tile.Rows(); bottom > tileRows {
 			tileRows = bottom
 		}
 	}
@@ -260,21 +291,10 @@ func (m Model) compositor() *lipgloss.Compositor {
 	for len(base) < tileRows+1 {
 		base = append(base, "")
 	}
-	base = append(base, margin+faint.Render("h/l move · Enter fire · / all commands · Esc close"))
+	base = append(base, margin+faint.Render("h/l tiles · j/k in gear · Enter fire · / all commands · Esc close"))
 	baseLayer := lipgloss.NewLayer(strings.Join(base, "\n")).X(0).Y(0).Z(0)
 
 	return lipgloss.NewCompositor(append([]*lipgloss.Layer{baseLayer}, layers...)...)
-}
-
-// mainRow returns the button-field row of a placement, or -1 for rail
-// tiles (which start at bodyY and own their full height).
-func (m Model) mainRow(p *placement) int {
-	for i := range m.main {
-		if &m.main[i] == p {
-			return i / 2
-		}
-	}
-	return -1
 }
 
 // hitTile decodes a compositor hit back to an order index.

@@ -43,27 +43,44 @@ func press(m Model, keys ...string) Model {
 	return m
 }
 
+// Focus order: 0 MODEL, 1 EFFORT, 2 REVIEW, 3 CONTEXT, 4 COMPACT,
+// 5 RESUME, 6 launcher.
+
 func TestFocusWalksAndEnterFires(t *testing.T) {
-	m := press(newTestModel(), "l", "enter") // launcher → REVIEW → fire
+	m := press(newTestModel(), "l", "l", "enter") // MODEL → EFFORT → REVIEW
 	sel, ok := m.Selection()
 	if !ok || sel.Name != "review" {
 		t.Errorf("Selection() = %v %v, want review", sel.Name, ok)
 	}
-	if m.InsertOnly() {
-		t.Error("deck button fire must not be insert-only")
+	if m.InsertOnly() || m.Arg() != "" {
+		t.Error("deck button fire must be plain: no insert-only, no arg")
 	}
 }
 
 func TestFocusWraps(t *testing.T) {
-	m := press(newTestModel(), "h", "enter") // wrap back to RESUME
+	m := press(newTestModel(), "h", "enter") // wrap back to the launcher bar
+	if m.screen != screenPalette {
+		t.Error("h from MODEL must wrap to the launcher; Enter opens palette")
+	}
+}
+
+func TestGearCursorAndCommit(t *testing.T) {
+	m := press(newTestModel(), "j", "j", "enter") // MODEL: haiku → sonnet → opus
 	sel, ok := m.Selection()
-	if !ok || sel.Name != "resume" {
-		t.Errorf("Selection() = %v %v, want resume (wrapped)", sel.Name, ok)
+	if !ok || sel.Name != "model" || m.Arg() != "opus" {
+		t.Errorf("gear commit = %v arg %q, want model opus", sel.Name, m.Arg())
+	}
+}
+
+func TestGearCursorWraps(t *testing.T) {
+	m := press(newTestModel(), "k", "enter") // k from haiku wraps to fable
+	if sel, _ := m.Selection(); m.Arg() != "fable" || sel.Name != "model" {
+		t.Errorf("gear k-wrap committed %q, want fable", m.Arg())
 	}
 }
 
 func TestLauncherOpensPaletteAndSelectionBubbles(t *testing.T) {
-	m := press(newTestModel(), "enter") // launcher focused first
+	m := press(newTestModel(), "h", "enter") // wrap to launcher, open
 	if m.screen != screenPalette {
 		t.Fatal("launcher must open the palette screen")
 	}
@@ -110,12 +127,36 @@ func TestClickFiresButton(t *testing.T) {
 	}
 }
 
-func TestClickLauncherOpensPalette(t *testing.T) {
+func TestClickGearValueCommitsIt(t *testing.T) {
 	m := newTestModel()
+	// MODEL gear top border at y=2; value rows follow — y=4 is sonnet.
 	updated, _ := m.Update(tea.MouseClickMsg{X: 3, Y: 4, Button: tea.MouseLeft})
 	m = updated.(Model)
+	sel, ok := m.Selection()
+	if !ok || sel.Name != "model" || m.Arg() != "sonnet" {
+		t.Errorf("click gear row = %v arg %q, want model sonnet", sel.Name, m.Arg())
+	}
+}
+
+func TestClickGearBorderOnlyFocuses(t *testing.T) {
+	m := newTestModel()
+	updated, _ := m.Update(tea.MouseClickMsg{X: 3, Y: 2, Button: tea.MouseLeft}) // top border
+	m = updated.(Model)
+	if _, ok := m.Selection(); ok {
+		t.Error("border click must not commit")
+	}
+	if m.focus != 0 {
+		t.Errorf("border click focus = %d, want 0 (MODEL)", m.focus)
+	}
+}
+
+func TestClickLauncherOpensPalette(t *testing.T) {
+	m := newTestModel()
+	// Launcher bar: bodyY(2) + rail 13 + gap 1 = y16; click its content row.
+	updated, _ := m.Update(tea.MouseClickMsg{X: 10, Y: 17, Button: tea.MouseLeft})
+	m = updated.(Model)
 	if m.screen != screenPalette {
-		t.Error("click on launcher must open the palette")
+		t.Error("click on launcher bar must open the palette")
 	}
 }
 
@@ -139,7 +180,7 @@ func TestWheelMovesFocus(t *testing.T) {
 
 func TestDeckViewRendersTiles(t *testing.T) {
 	content := newTestModel().View().Content
-	for _, want := range []string{"GEARSHIFTER", "ALL COMMANDS…", "REVIEW", "/review", "CONTEXT", "COMPACT", "RESUME"} {
+	for _, want := range []string{"GEARSHIFTER", "MODEL", "sonnet", "EFFORT", "max", "ALL COMMANDS…", "REVIEW", "/review", "CONTEXT", "COMPACT", "RESUME"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("deck view missing %q", want)
 		}

@@ -20,6 +20,13 @@ type TileActivatedMsg struct {
 	Command catalog.Command
 }
 
+// GearShiftedMsg reports a committed gear value; the app injects
+// "/command value".
+type GearShiftedMsg struct {
+	Command catalog.Command
+	Value   string
+}
+
 // ScreenRequestedMsg asks the app to swap screens (Launcher → palette).
 type ScreenRequestedMsg struct{}
 
@@ -44,13 +51,15 @@ var (
 )
 
 // box renders bordered tile chrome around pre-styled content rows. Mock D
-// chrome: single border normally, double-border focus ring.
+// chrome: single border normally, double-border focus ring. lipgloss v2
+// Style.Width is the TOTAL frame width (borders included) — content rows
+// get width-2 cells.
 func box(focused bool, width int, rows ...string) string {
 	style := normalTile
 	if focused {
 		style = focusTile
 	}
-	return style.Width(width - 2).Render(strings.Join(rows, "\n"))
+	return style.Width(width).Render(strings.Join(rows, "\n"))
 }
 
 // center pads s to exactly width cells, centered. Rows are styled AFTER
@@ -90,37 +99,114 @@ func (b Button) View(focused bool, width int) string {
 	return box(focused, width, label, sub)
 }
 
-// Launcher opens the searchable palette screen (the escape hatch to the
-// full catalog).
-type Launcher struct {
-	Count int // catalog size, shown as microcopy
-	span  int
-	rows  int
+// Gear selects one value of an enum command (gated column, locked UX
+// decision: all values visible, current highlighted, one click to any
+// state). Current starts unknown (-1) — stateless until the V7 spike
+// answers how to sniff the session's live value.
+type Gear struct {
+	Cmd     catalog.Command
+	Label   string
+	Values  []string
+	current int
+	cursor  int
+	span    int
 }
 
-func NewLauncher(count, span, rows int) Launcher {
-	return Launcher{Count: count, span: span, rows: rows}
+func NewGear(cmd catalog.Command, label string, values []string, span int) Gear {
+	return Gear{Cmd: cmd, Label: label, Values: values, current: -1, span: span}
+}
+
+// Activate commits the cursor value.
+func (g Gear) Activate() tea.Msg {
+	return GearShiftedMsg{Command: g.Cmd, Value: g.Values[g.cursor]}
+}
+
+func (g Gear) Span() int { return g.span }
+func (g Gear) Rows() int { return len(g.Values) + 2 }
+
+// CursorNext / CursorPrev walk the gated column (j/k inside a focused
+// gear), wrapping.
+func (g Gear) CursorNext() Gear {
+	g.cursor = (g.cursor + 1) % len(g.Values)
+	return g
+}
+
+func (g Gear) CursorPrev() Gear {
+	g.cursor = (g.cursor - 1 + len(g.Values)) % len(g.Values)
+	return g
+}
+
+// WithCursor points the cursor at a clicked value row.
+func (g Gear) WithCursor(i int) Gear {
+	if i >= 0 && i < len(g.Values) {
+		g.cursor = i
+	}
+	return g
+}
+
+// ValueAt maps a row offset inside the tile (0 = top border) to a value
+// index, for mouse hits.
+func (g Gear) ValueAt(rowInTile int) (int, bool) {
+	i := rowInTile - 1
+	return i, i >= 0 && i < len(g.Values)
+}
+
+// View hand-rolls the box so the label embeds in the top border
+// (┌ MODEL ───┐, mock D chrome); border charset matches the lipgloss
+// Normal/Double borders the buttons use.
+func (g Gear) View(focused bool, width int) string {
+	h, v, tl, tr, bl, br := "─", "│", "┌", "┐", "└", "┘"
+	if focused {
+		h, v, tl, tr, bl, br = "═", "║", "╔", "╗", "╚", "╝"
+	}
+	inner := width - 2
+	title := " " + g.Label + " "
+	if lipgloss.Width(title) > inner {
+		title = string([]rune(title)[:max(0, inner)])
+	}
+	rows := []string{tl + title + strings.Repeat(h, max(0, inner-lipgloss.Width(title))) + tr}
+	for i, val := range g.Values {
+		mark := "  "
+		if i == g.current {
+			mark = "▐ " // the session's current value (V7 fills this in)
+		}
+		line := mark + val
+		line += strings.Repeat(" ", max(0, inner-lipgloss.Width(line)))
+		switch {
+		case focused && i == g.cursor:
+			line = reversed.Render(line)
+		case i == g.current:
+			line = lipgloss.NewStyle().Bold(true).Render(line)
+		}
+		rows = append(rows, v+line+v)
+	}
+	rows = append(rows, bl+strings.Repeat(h, inner)+br)
+	return strings.Join(rows, "\n")
+}
+
+// Launcher opens the searchable palette screen (the escape hatch to the
+// full catalog): a 3-row full-width bar, label left, catalog count right.
+type Launcher struct {
+	Count int
+	span  int
+}
+
+func NewLauncher(count, span int) Launcher {
+	return Launcher{Count: count, span: span}
 }
 
 func (l Launcher) Activate() tea.Msg { return ScreenRequestedMsg{} }
 func (l Launcher) Span() int         { return l.span }
-func (l Launcher) Rows() int         { return l.rows }
+func (l Launcher) Rows() int         { return 3 }
 
 func (l Launcher) View(focused bool, width int) string {
 	inner := width - 2
-	content := make([]string, 0, l.rows-2)
-	// Vertically center the two content lines in the tall tile.
-	pad := (l.rows - 2 - 2) / 2
-	for i := 0; i < pad; i++ {
-		content = append(content, strings.Repeat(" ", inner))
-	}
-	label := center("ALL COMMANDS…", inner)
+	label := " ALL COMMANDS…"
 	if focused {
 		label = reversed.Render(label)
 	}
-	content = append(content, label, faint.Render(center(strconv.Itoa(l.Count)+" cmds", inner)))
-	for len(content) < l.rows-2 {
-		content = append(content, strings.Repeat(" ", inner))
-	}
-	return box(focused, width, content...)
+	count := strconv.Itoa(l.Count) + " cmds "
+	gap := max(0, inner-lipgloss.Width(" ALL COMMANDS…")-lipgloss.Width(count))
+	line := label + strings.Repeat(" ", gap) + faint.Render(count)
+	return box(focused, width, line)
 }
