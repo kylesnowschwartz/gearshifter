@@ -9,6 +9,7 @@ import (
 
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 	"github.com/kylesnowschwartz/gearshifter/internal/widget"
 )
 
@@ -192,6 +193,33 @@ func TestLoadRejectsInsertOnNonButtons(t *testing.T) {
 	_, err := Load(writeLayout(t, "[[tile]]\ntype = \"launcher\"\ninsert = true"), nil, agent.State{}, testStyles)
 	if err == nil || !strings.Contains(err.Error(), "insert = true applies only to buttons") {
 		t.Errorf("insert on a launcher must error with words, got %v", err)
+	}
+}
+
+// glyph = "…" (STRIP-EMBED step 2): authored chip glyph, buttons only,
+// exactly one cell; Compacted resolves authored > theme table > bullet.
+func TestLoadGlyphValidatesAndReachesCompactChip(t *testing.T) {
+	placements, err := Load(writeLayout(t,
+		"[[tile]]\ntype = \"button\"\ncommand = \"goal\"\nglyph = \"⌾\"\n\n[[tile]]\ntype = \"button\"\ncommand = \"radio\""),
+		nil, agent.State{}, testStyles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chips := Compacted(placements, agent.State{}, testStyles)
+	if v := chips[0].Tile.View(widget.RenderState{}, 12); !strings.Contains(v, "⌾ GOAL") {
+		t.Errorf("authored glyph must win in the compact chip: %q", v)
+	}
+	if v := chips[1].Tile.View(widget.RenderState{}, 12); !strings.Contains(v, theme.GlyphFallback+" RADIO") {
+		t.Errorf("unauthored personal command must fall back to the bullet: %q", v)
+	}
+
+	for _, c := range []struct{ content, want string }{
+		{"[[tile]]\ntype = \"gear\"\ncommand = \"model\"\nvalues = [\"a\"]\nglyph = \"⌾\"", "glyph applies only to buttons"},
+		{"[[tile]]\ntype = \"button\"\ncommand = \"goal\"\nglyph = \"ワ\"", "must be exactly one"},
+	} {
+		if _, err := Load(writeLayout(t, c.content), nil, agent.State{}, testStyles); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("want error containing %q, got %v", c.want, err)
+		}
 	}
 }
 

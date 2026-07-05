@@ -15,11 +15,15 @@ import (
 
 // Placement puts a tile at a grid column and row. All geometry flows
 // from deck.Grid and the Fibonacci scale — Samara's law: tiles are
-// placed by the system, never nudged.
+// placed by the system, never nudged. Glyph is the tile's authored
+// compact-chip glyph (layout.toml `glyph =`); empty means the theme
+// table decides. In compact mode Col/Y are zero AND MEANINGLESS — the
+// flow packs by order alone; never read them there.
 type Placement struct {
-	Tile widget.Tile
-	Col  int
-	Y    int
+	Tile  widget.Tile
+	Col   int
+	Y     int
+	Glyph string
 }
 
 // Vertical spacing from the Fibonacci scale (deck.Scale): tiles start
@@ -34,10 +38,12 @@ var (
 // 2026-07-05 after Kyle QA'd the dense demo (examples/dense.toml).
 const buttonsPerRow = 4
 
-// entry pairs a tile with its start column before rows are derived.
+// entry pairs a tile with its start column (and authored chip glyph)
+// before rows are derived.
 type entry struct {
-	tile widget.Tile
-	col  int
+	tile  widget.Tile
+	col   int
+	glyph string
 }
 
 // flow derives each tile's row, skyline-style: the first row sits at
@@ -55,7 +61,7 @@ func flow(entries []entry) []Placement {
 				y = bottom
 			}
 		}
-		placements = append(placements, Placement{Tile: e.tile, Col: e.col, Y: y})
+		placements = append(placements, Placement{Tile: e.tile, Col: e.col, Y: y, Glyph: e.glyph})
 	}
 	return placements
 }
@@ -75,7 +81,7 @@ func Default(commands []catalog.Command, state agent.State, st *theme.Styles) []
 	effort := widget.NewGear(st, findCommand(commands, "effort"), "EFFORT",
 		[]string{"low", "medium", "high", "max"}, deck.RailSpan).
 		WithCurrent(gearSetting("effort", state))
-	entries := []entry{{model, 0}, {effort, 0}}
+	entries := []entry{{tile: model}, {tile: effort}}
 
 	buttonSpan := deck.MainSpan / buttonsPerRow
 	for i, b := range []struct{ name, label string }{
@@ -97,10 +103,10 @@ func Default(commands []catalog.Command, state agent.State, st *theme.Styles) []
 		{"reload-plugins", "RELOAD"},
 	} {
 		btn := widget.NewButton(st, findCommand(commands, b.name), b.label, buttonSpan)
-		entries = append(entries, entry{btn, deck.RailSpan + (i%buttonsPerRow)*buttonSpan})
+		entries = append(entries, entry{tile: btn, col: deck.RailSpan + (i%buttonsPerRow)*buttonSpan})
 	}
 
-	entries = append(entries, entry{widget.NewLauncher(st, len(commands), deck.Columns), 0})
+	entries = append(entries, entry{tile: widget.NewLauncher(st, len(commands), deck.Columns), col: 0})
 	return flow(entries)
 }
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
@@ -26,6 +27,7 @@ type tomlTile struct {
 	Col     int      `toml:"col"`
 	Span    *int     `toml:"span"`
 	Insert  bool     `toml:"insert"` // buttons only: insert "/cmd " without Enter
+	Glyph   string   `toml:"glyph"`  // buttons only: compact-chip glyph (one cell; default = theme table)
 }
 
 type tomlLayout struct {
@@ -64,7 +66,7 @@ func Load(path string, commands []catalog.Command, state agent.State, st *theme.
 			}
 			return nil, fmt.Errorf("%s: [[tile]] %d: %w", loc, i+1, err)
 		}
-		entries = append(entries, entry{tile: tile, col: t.Col})
+		entries = append(entries, entry{tile: tile, col: t.Col, glyph: t.Glyph})
 	}
 	return flow(entries), nil
 }
@@ -76,7 +78,7 @@ func tomlError(path string, err error) error {
 	var sme *toml.StrictMissingError
 	if errors.As(err, &sme) && len(sme.Errors) > 0 {
 		row, _ := sme.Errors[0].Position()
-		return fmt.Errorf("%s:%d: unknown key %q (allowed: type, command, label, values, col, span)",
+		return fmt.Errorf("%s:%d: unknown key %q (allowed: type, command, label, values, col, span, insert, glyph)",
 			path, row, strings.Join(sme.Errors[0].Key(), "."))
 	}
 	var de *toml.DecodeError
@@ -106,6 +108,14 @@ func tileLines(raw []byte) []int {
 func buildTile(t tomlTile, commands []catalog.Command, state agent.State, st *theme.Styles) (widget.Tile, error) {
 	if t.Insert && t.Type != "button" {
 		return nil, fmt.Errorf("insert = true applies only to buttons, not %q", t.Type)
+	}
+	if t.Glyph != "" {
+		if t.Type != "button" {
+			return nil, fmt.Errorf("glyph applies only to buttons, not %q", t.Type)
+		}
+		if lipgloss.Width(t.Glyph) != 1 {
+			return nil, fmt.Errorf("glyph %q is %d cells — chip glyphs must be exactly one (a wider glyph shifts every chip after it)", t.Glyph, lipgloss.Width(t.Glyph))
+		}
 	}
 	switch t.Type {
 	case "button":

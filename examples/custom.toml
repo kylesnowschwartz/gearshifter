@@ -54,12 +54,14 @@ span    = 4
 type    = "button"
 command = "goal"
 insert  = true
+glyph   = "⌾" # compact-strip chip glyph; personal commands would otherwise all show "•"
 col     = 5
 span    = 4
 
 [[tile]]
 type    = "button"
 command = "radio"
+glyph   = "♫"
 col     = 9
 span    = 4
 
