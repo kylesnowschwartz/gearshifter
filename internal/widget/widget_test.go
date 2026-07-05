@@ -4,11 +4,16 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 )
 
+var testStyles = theme.Plain()
+
 func modelGear() Gear {
-	return NewGear(catalog.Command{Name: "model"}, "MODEL",
+	return NewGear(testStyles, catalog.Command{Name: "model"}, "MODEL",
 		[]string{"haiku", "sonnet", "opus", "fable"}, 5)
 }
 
@@ -37,7 +42,7 @@ func TestWithCurrentMatching(t *testing.T) {
 func TestWithCurrentPrefersExactMatch(t *testing.T) {
 	// containment alone would let "o" claim the setting "opus" (review
 	// finding): the exact value must win over an earlier substring value.
-	g := NewGear(catalog.Command{Name: "model"}, "MODEL", []string{"o", "opus"}, 5).
+	g := NewGear(testStyles, catalog.Command{Name: "model"}, "MODEL", []string{"o", "opus"}, 5).
 		WithCurrent("opus")
 	if g.current != 1 {
 		t.Errorf("exact match must beat substring: current = %d, want 1", g.current)
@@ -53,6 +58,41 @@ func TestTruncateIsCellAware(t *testing.T) {
 	}
 	if truncate("plain", 10) != "plain" {
 		t.Error("strings within budget pass through untouched")
+	}
+}
+
+// Themes may change color, never geometry: the compositor hit-tests the
+// rendered cells, so a themed tile must occupy exactly the cells its
+// plain twin does (M5 P1 contract).
+func TestThemedTileGeometryMatchesPlain(t *testing.T) {
+	themed, err := theme.Load("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := catalog.Command{Name: "compact"}
+	pairs := []struct {
+		name         string
+		plain, color Tile
+	}{
+		{"button", NewButton(testStyles, cmd, "COMPACT", 4), NewButton(themed, cmd, "COMPACT", 4)},
+		{"gear", modelGear(), NewGear(themed, catalog.Command{Name: "model"}, "MODEL",
+			[]string{"haiku", "sonnet", "opus", "fable"}, 5)},
+		{"launcher", NewLauncher(testStyles, 42, 13), NewLauncher(themed, 42, 13)},
+	}
+	for _, p := range pairs {
+		for _, focused := range []bool{false, true} {
+			a := strings.Split(p.plain.View(focused, 20), "\n")
+			b := strings.Split(p.color.View(focused, 20), "\n")
+			if len(a) != len(b) {
+				t.Errorf("%s focused=%v: row count %d vs %d", p.name, focused, len(a), len(b))
+				continue
+			}
+			for i := range a {
+				if wa, wb := lipgloss.Width(a[i]), lipgloss.Width(b[i]); wa != wb {
+					t.Errorf("%s focused=%v row %d: width %d vs %d", p.name, focused, i, wa, wb)
+				}
+			}
+		}
 	}
 }
 

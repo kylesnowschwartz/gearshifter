@@ -1,7 +1,8 @@
 // Package widget holds the deck tile archetypes (Button, Gear, Launcher).
 // Tiles emit intent Msgs and never touch tmux (ARCHITECTURE.md §2); widget
 // knows commands, not layout — geometry arrives as a width from the deck
-// grid via View.
+// grid via View, and every style arrives from *theme.Styles at
+// construction (widgets never build styles).
 package widget
 
 import (
@@ -12,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 )
 
 // TileActivatedMsg reports a fired tile; the app layer translates it into
@@ -46,14 +48,6 @@ type Tile interface {
 	Rows() int
 }
 
-var (
-	faint      = lipgloss.NewStyle().Faint(true)
-	reversed   = lipgloss.NewStyle().Reverse(true)
-	bold       = lipgloss.NewStyle().Bold(true)
-	normalTile = lipgloss.NewStyle().Border(lipgloss.NormalBorder())
-	focusTile  = lipgloss.NewStyle().Border(lipgloss.DoubleBorder())
-)
-
 // borderRows/borderCols are the chrome every tile pays: top + bottom
 // border rows, left + right border columns.
 const (
@@ -61,15 +55,10 @@ const (
 	borderCols = 2
 )
 
-// box renders bordered tile chrome around pre-styled content rows. Mock D
-// chrome: single border normally, double-border focus ring. lipgloss v2
-// Style.Width is the TOTAL frame width (borders included) — content rows
-// get width-2 cells.
-func box(focused bool, width int, rows ...string) string {
-	style := normalTile
-	if focused {
-		style = focusTile
-	}
+// box renders bordered tile chrome around pre-styled content rows.
+// lipgloss v2 Style.Width is the TOTAL frame width (borders included) —
+// content rows get width-2 cells.
+func box(style lipgloss.Style, width int, rows ...string) string {
 	return style.Width(width).Render(strings.Join(rows, "\n"))
 }
 
@@ -108,11 +97,12 @@ type Button struct {
 	Cmd    catalog.Command
 	Label  string
 	Insert bool // insert-without-Enter instead of firing (layout.toml `insert = true`)
+	styles *theme.Styles
 	span   int
 }
 
-func NewButton(cmd catalog.Command, label string, span int) Button {
-	return Button{Cmd: cmd, Label: label, span: span}
+func NewButton(st *theme.Styles, cmd catalog.Command, label string, span int) Button {
+	return Button{Cmd: cmd, Label: label, styles: st, span: span}
 }
 
 // WithInsert makes the button insert "/cmd " without Enter when fired.
@@ -129,13 +119,18 @@ func (b Button) Span() int         { return b.span }
 func (b Button) Rows() int         { return borderRows + buttonContentRows }
 
 func (b Button) View(focused bool, width int) string {
+	st := b.styles.Button
 	inner := width - borderCols
 	label := center(b.Label, inner)
+	boxStyle := st.Box
 	if focused {
-		label = reversed.Render(label)
+		label = st.LabelFocus.Render(label)
+		boxStyle = st.BoxFocus
+	} else {
+		label = st.Label.Render(label)
 	}
-	sub := faint.Render(center("/"+b.Cmd.Name, inner))
-	return box(focused, width, label, sub)
+	sub := st.Sub.Render(center("/"+b.Cmd.Name, inner))
+	return box(boxStyle, width, label, sub)
 }
 
 // Gear selects one value of an enum command (gated column, locked UX
@@ -146,13 +141,14 @@ type Gear struct {
 	Cmd     catalog.Command
 	Label   string
 	Values  []string
+	styles  *theme.Styles
 	current int
 	cursor  int
 	span    int
 }
 
-func NewGear(cmd catalog.Command, label string, values []string, span int) Gear {
-	return Gear{Cmd: cmd, Label: label, Values: values, current: -1, span: span}
+func NewGear(st *theme.Styles, cmd catalog.Command, label string, values []string, span int) Gear {
+	return Gear{Cmd: cmd, Label: label, Values: values, styles: st, current: -1, span: span}
 }
 
 // Activate commits the cursor value.
@@ -221,15 +217,21 @@ func (g Gear) ValueAt(rowInTile int) (int, bool) {
 
 // View hand-rolls the box so the label embeds in the top border
 // (┌ MODEL ───┐, mock D chrome); border charset matches the lipgloss
-// Normal/Double borders the buttons use.
+// Normal/Double borders the buttons use. Border chars and the inner
+// value line are styled as separate sequential segments — never nested
+// (M2 gotcha) — so the frame can carry its own color.
 func (g Gear) View(focused bool, width int) string {
+	st := g.styles.Gear
 	h, v, tl, tr, bl, br := "─", "│", "┌", "┐", "└", "┘"
+	frame := st.Frame
 	if focused {
 		h, v, tl, tr, bl, br = "═", "║", "╔", "╗", "╚", "╝"
+		frame = st.FrameFocus
 	}
+	side := frame.Render(v)
 	inner := width - borderCols
 	title := truncate(" "+g.Label+" ", max(0, inner))
-	rows := []string{tl + title + strings.Repeat(h, max(0, inner-lipgloss.Width(title))) + tr}
+	rows := []string{frame.Render(tl + title + strings.Repeat(h, max(0, inner-lipgloss.Width(title))) + tr)}
 	for i, val := range g.Values {
 		mark := "  "
 		if i == g.current {
@@ -239,25 +241,28 @@ func (g Gear) View(focused bool, width int) string {
 		line += strings.Repeat(" ", max(0, inner-lipgloss.Width(line)))
 		switch {
 		case focused && i == g.cursor:
-			line = reversed.Render(line)
+			line = st.ValueCursor.Render(line)
 		case i == g.current:
-			line = bold.Render(line)
+			line = st.ValueCurrent.Render(line)
+		default:
+			line = st.Value.Render(line)
 		}
-		rows = append(rows, v+line+v)
+		rows = append(rows, side+line+side)
 	}
-	rows = append(rows, bl+strings.Repeat(h, inner)+br)
+	rows = append(rows, frame.Render(bl+strings.Repeat(h, inner)+br))
 	return strings.Join(rows, "\n")
 }
 
 // Launcher opens the searchable palette screen (the escape hatch to the
 // full catalog): a 3-row full-width bar, label left, catalog count right.
 type Launcher struct {
-	Count int
-	span  int
+	Count  int
+	styles *theme.Styles
+	span   int
 }
 
-func NewLauncher(count, span int) Launcher {
-	return Launcher{Count: count, span: span}
+func NewLauncher(st *theme.Styles, count, span int) Launcher {
+	return Launcher{Count: count, styles: st, span: span}
 }
 
 // launcherContentRows: the bar is a single label/count line.
@@ -268,13 +273,18 @@ func (l Launcher) Span() int         { return l.span }
 func (l Launcher) Rows() int         { return borderRows + launcherContentRows }
 
 func (l Launcher) View(focused bool, width int) string {
+	st := l.styles.Launcher
 	inner := width - borderCols
 	label := " ALL COMMANDS…"
+	boxStyle := st.Box
 	if focused {
-		label = reversed.Render(label)
+		label = st.LabelFocus.Render(label)
+		boxStyle = st.BoxFocus
+	} else {
+		label = st.Label.Render(label)
 	}
 	count := strconv.Itoa(l.Count) + " cmds "
 	gap := max(0, inner-lipgloss.Width(" ALL COMMANDS…")-lipgloss.Width(count))
-	line := label + strings.Repeat(" ", gap) + faint.Render(count)
-	return box(focused, width, line)
+	line := label + strings.Repeat(" ", gap) + st.Count.Render(count)
+	return box(boxStyle, width, line)
 }

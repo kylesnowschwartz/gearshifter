@@ -51,6 +51,14 @@ Sources of truth (all in `.agent-history/`, git-ignored, disk-only):
   widget+deck+catalog+agent (P4's layout.toml parses into its Placements);
   session-state readers live in `agent/claude` behind `agent.Provider` —
   catalog is commands-only.
+- **Theme seam (M5 P1):** color literals ONLY in `internal/theme` palette
+  constructors; widgets/app/palette take `*theme.Styles` at construction
+  (Crush roles→styles registry, TUI-AESTHETICS.md — never a global).
+  Themes change color, never geometry (hit-testing; pinned by test).
+  Themes: `default` (placeholder charcoal + clawd orange — a stand-in,
+  NOT the house palette, which is deliberately deferred to M5 P5) and
+  `plain` (colorless; behavior-freeze + reduced-decoration path), via
+  `--theme` / `@gearshifter-theme`.
 
 ## State / next steps
 

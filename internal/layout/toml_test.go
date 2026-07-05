@@ -26,11 +26,11 @@ func writeLayout(t *testing.T, content string) string {
 func TestExampleLayoutReproducesDefaultDeck(t *testing.T) {
 	cmds := []catalog.Command{{Name: "review", ArgumentHint: ""}, {Name: "model"}}
 	state := agent.State{Model: "haiku", Effort: "high"}
-	got, err := Load("../../examples/layout.toml", cmds, state)
+	got, err := Load("../../examples/layout.toml", cmds, state, testStyles)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Default(cmds, state)
+	want := Default(cmds, state, testStyles)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load(examples/layout.toml) diverges from Default():\ngot  %+v\nwant %+v", got, want)
 	}
@@ -47,7 +47,7 @@ span    = 13
 [[tile]]
 type    = "button"
 command = "context"
-`), nil, agent.State{})
+`), nil, agent.State{}, testStyles)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestLoadDefaultsLabelSpanAndSlash(t *testing.T) {
 [[tile]]
 type    = "button"
 command = "/radio"
-`), nil, agent.State{})
+`), nil, agent.State{}, testStyles)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestLoadMarksGearCurrentFromState(t *testing.T) {
 type    = "gear"
 command = "model"
 values  = ["haiku", "sonnet"]
-`), nil, agent.State{Model: "claude-sonnet-5"})
+`), nil, agent.State{Model: "claude-sonnet-5"}, testStyles)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestLoadErrorsNameTheLine(t *testing.T) {
 		{"empty file", "", "no [[tile]] entries"},
 	}
 	for _, c := range cases {
-		_, err := Load(writeLayout(t, c.content), nil, agent.State{})
+		_, err := Load(writeLayout(t, c.content), nil, agent.State{}, testStyles)
 		if err == nil {
 			t.Errorf("%s: want error containing %q, got nil", c.name, c.want)
 			continue
@@ -128,7 +128,7 @@ func TestLoadErrorsNameTheLine(t *testing.T) {
 // kyle.toml is a personal layout, not Default-pinned — but it must
 // always parse, and its insert/style-gear features must hold.
 func TestKyleLayoutLoads(t *testing.T) {
-	placements, err := Load("../../examples/kyle.toml", nil, agent.State{Style: "mayo-clinic"})
+	placements, err := Load("../../examples/kyle.toml", nil, agent.State{Style: "mayo-clinic"}, testStyles)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,14 +151,14 @@ func TestKyleLayoutLoads(t *testing.T) {
 }
 
 func TestLoadRejectsInsertOnNonButtons(t *testing.T) {
-	_, err := Load(writeLayout(t, "[[tile]]\ntype = \"launcher\"\ninsert = true"), nil, agent.State{})
+	_, err := Load(writeLayout(t, "[[tile]]\ntype = \"launcher\"\ninsert = true"), nil, agent.State{}, testStyles)
 	if err == nil || !strings.Contains(err.Error(), "insert = true applies only to buttons") {
 		t.Errorf("insert on a launcher must error with words, got %v", err)
 	}
 }
 
 func TestLoadMissingFile(t *testing.T) {
-	if _, err := Load(filepath.Join(t.TempDir(), "absent.toml"), nil, agent.State{}); err == nil {
+	if _, err := Load(filepath.Join(t.TempDir(), "absent.toml"), nil, agent.State{}, testStyles); err == nil {
 		t.Error("missing file must error")
 	}
 }

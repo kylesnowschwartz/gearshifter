@@ -12,6 +12,7 @@ import (
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 	"github.com/kylesnowschwartz/gearshifter/internal/deck"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 	"github.com/kylesnowschwartz/gearshifter/internal/widget"
 )
 
@@ -37,7 +38,7 @@ type tomlLayout struct {
 // go through the same skyline flow as the default deck. Every error names
 // the offending line; a bad layout must fail with words, not a broken
 // deck.
-func Load(path string, commands []catalog.Command, state agent.State) ([]Placement, error) {
+func Load(path string, commands []catalog.Command, state agent.State, st *theme.Styles) ([]Placement, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("layout %s: %w", path, err)
@@ -55,7 +56,7 @@ func Load(path string, commands []catalog.Command, state agent.State) ([]Placeme
 	lines := tileLines(raw)
 	entries := make([]entry, 0, len(doc.Tiles))
 	for i, t := range doc.Tiles {
-		tile, err := buildTile(t, commands, state)
+		tile, err := buildTile(t, commands, state, st)
 		if err != nil {
 			loc := path // inline `tile = [{…}]` arrays have no [[tile]] header line
 			if i < len(lines) {
@@ -102,7 +103,7 @@ func tileLines(raw []byte) []int {
 // buildTile validates one entry and constructs its widget. The type
 // vocabulary is the archetype set (ARCHITECTURE.md §7): config type=
 // matches the widget type names, and users don't script new ones.
-func buildTile(t tomlTile, commands []catalog.Command, state agent.State) (widget.Tile, error) {
+func buildTile(t tomlTile, commands []catalog.Command, state agent.State, st *theme.Styles) (widget.Tile, error) {
 	if t.Insert && t.Type != "button" {
 		return nil, fmt.Errorf("insert = true applies only to buttons, not %q", t.Type)
 	}
@@ -116,7 +117,7 @@ func buildTile(t tomlTile, commands []catalog.Command, state agent.State) (widge
 		if err != nil {
 			return nil, err
 		}
-		btn := widget.NewButton(findCommand(commands, name), labelOf(t, name), span)
+		btn := widget.NewButton(st, findCommand(commands, name), labelOf(t, name), span)
 		if t.Insert {
 			btn = btn.WithInsert()
 		}
@@ -133,14 +134,14 @@ func buildTile(t tomlTile, commands []catalog.Command, state agent.State) (widge
 		if err != nil {
 			return nil, err
 		}
-		g := widget.NewGear(findCommand(commands, name), labelOf(t, name), t.Values, span)
+		g := widget.NewGear(st, findCommand(commands, name), labelOf(t, name), t.Values, span)
 		return g.WithCurrent(gearSetting(name, state)), nil
 	case "launcher":
 		span, err := spanOf(t, deck.Columns)
 		if err != nil {
 			return nil, err
 		}
-		return widget.NewLauncher(len(commands), span), nil
+		return widget.NewLauncher(st, len(commands), span), nil
 	case "":
 		return nil, fmt.Errorf(`missing type — every tile needs type = "button" | "gear" | "launcher"`)
 	default:

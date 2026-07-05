@@ -5,11 +5,16 @@ import (
 
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 	"github.com/kylesnowschwartz/gearshifter/internal/widget"
 )
 
+// testStyles is shared by layout_test.go and toml_test.go: one pointer,
+// so Load-vs-Default DeepEqual comparisons see identical tiles.
+var testStyles = theme.Plain()
+
 func TestDefaultPlacementOrderIsReadingOrder(t *testing.T) {
-	placements := Default(nil, agent.State{})
+	placements := Default(nil, agent.State{}, testStyles)
 	want := []string{"MODEL", "EFFORT", "COMPACT", "COPY", "CLEAR", "CONTEXT", "RESUME", "CONFIG"}
 	if len(placements) != len(want)+1 {
 		t.Fatalf("Default yields %d placements, want %d", len(placements), len(want)+1)

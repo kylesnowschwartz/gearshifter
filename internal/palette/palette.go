@@ -13,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 )
 
 // debugLog, when GEARSHIFTER_DEBUG is set, writes every incoming message to
@@ -26,17 +27,11 @@ func debugLog(msg tea.Msg) {
 	}
 }
 
-var (
-	cursorStyle = lipgloss.NewStyle().Reverse(true).Bold(true)
-	hintStyle   = lipgloss.NewStyle().Faint(true)
-	badgeStyle  = lipgloss.NewStyle().Faint(true)
-	promptStyle = lipgloss.NewStyle().Bold(true)
-)
-
 // Model renders the command catalog as a filterable, scrollable list. Zero
 // value is not usable; construct with New.
 type Model struct {
 	commands   []catalog.Command
+	styles     theme.ListStyles
 	query      string
 	visible    []int // indices into commands, ranked by filter match
 	cursor     int   // position within visible
@@ -48,10 +43,11 @@ type Model struct {
 }
 
 // New returns a palette over the given commands, expected pre-sorted by
-// catalog.Build.
-func New(commands []catalog.Command) Model {
+// catalog.Build, styled by the theme's list registry.
+func New(commands []catalog.Command, st theme.ListStyles) Model {
 	return Model{
 		commands: commands,
+		styles:   st,
 		visible:  filterCommands(commands, ""),
 	}
 }
@@ -159,14 +155,14 @@ func (m *Model) setQuery(q string) {
 
 func (m Model) View() tea.View {
 	var b strings.Builder
-	b.WriteString(promptStyle.Render("> "+m.query) + "█\n")
+	b.WriteString(m.styles.Prompt.Render("> "+m.query) + "█\n")
 	last := min(m.offset+m.pageSize(), len(m.visible))
 	for i := m.offset; i < last; i++ {
 		b.WriteString(m.renderRow(i))
 		b.WriteByte('\n')
 	}
 	if len(m.visible) == 0 {
-		b.WriteString(hintStyle.Render("no commands match") + "\n")
+		b.WriteString(m.styles.Hint.Render("no commands match") + "\n")
 	}
 	fmt.Fprintf(&b, "%d/%d · enter run · tab insert · esc cancel", len(m.visible), len(m.commands))
 	v := tea.NewView(b.String())
@@ -188,10 +184,10 @@ func (m Model) renderRow(i int) string {
 		}
 		return s.Render(text)
 	}
-	badge := style(badgeStyle, "["+c.Source+"]")
+	badge := style(m.styles.Badge, "["+c.Source+"]")
 	left := "/" + c.Name
 	if c.ArgumentHint != "" {
-		left += " " + style(hintStyle, c.ArgumentHint)
+		left += " " + style(m.styles.Hint, c.ArgumentHint)
 	}
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(badge) - 1
 	if gap < 1 {
@@ -200,7 +196,7 @@ func (m Model) renderRow(i int) string {
 	}
 	row := left + strings.Repeat(" ", gap) + badge
 	if focused {
-		return cursorStyle.Render(row)
+		return m.styles.Cursor.Render(row)
 	}
 	return row
 }

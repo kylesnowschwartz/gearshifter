@@ -7,10 +7,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 )
 
 func newTestModel() Model {
-	m := New(testCommands()) // fixtures shared with filter_test.go
+	m := New(testCommands(), theme.Plain().List) // fixtures shared with filter_test.go
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 10})
 	return updated.(Model)
 }
@@ -133,7 +134,7 @@ func TestViewportFollowsCursor(t *testing.T) {
 	for i := range cmds {
 		cmds[i] = catalog.Command{Name: strings.Repeat("x", i+1)}
 	}
-	m := New(cmds)
+	m := New(cmds, theme.Plain().List)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 6}) // pageSize 4
 	m = updated.(Model)
 	for range 10 {

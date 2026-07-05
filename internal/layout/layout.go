@@ -9,6 +9,7 @@ import (
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 	"github.com/kylesnowschwartz/gearshifter/internal/deck"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 	"github.com/kylesnowschwartz/gearshifter/internal/widget"
 )
 
@@ -62,12 +63,12 @@ func flow(entries []entry) []Placement {
 // launcher as a full-width bottom bar. Buttons are the data-ranked
 // generic built-ins from Kyle's real usage history (DECK-CONTENT.md,
 // 2026-07-05). Placement order = reading order = the app's focus order.
-// state marks each gear's live value (V7).
-func Default(commands []catalog.Command, state agent.State) []Placement {
-	model := widget.NewGear(findCommand(commands, "model"), "MODEL",
+// state marks each gear's live value (V7); st styles every tile.
+func Default(commands []catalog.Command, state agent.State, st *theme.Styles) []Placement {
+	model := widget.NewGear(st, findCommand(commands, "model"), "MODEL",
 		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan).
 		WithCurrent(gearSetting("model", state))
-	effort := widget.NewGear(findCommand(commands, "effort"), "EFFORT",
+	effort := widget.NewGear(st, findCommand(commands, "effort"), "EFFORT",
 		[]string{"low", "medium", "high", "max"}, deck.RailSpan).
 		WithCurrent(gearSetting("effort", state))
 	entries := []entry{{model, 0}, {effort, 0}}
@@ -81,11 +82,11 @@ func Default(commands []catalog.Command, state agent.State) []Placement {
 		{"resume", "RESUME"},
 		{"config", "CONFIG"},
 	} {
-		btn := widget.NewButton(findCommand(commands, b.name), b.label, buttonSpan)
+		btn := widget.NewButton(st, findCommand(commands, b.name), b.label, buttonSpan)
 		entries = append(entries, entry{btn, deck.RailSpan + (i%buttonsPerRow)*buttonSpan})
 	}
 
-	entries = append(entries, entry{widget.NewLauncher(len(commands), deck.Columns), 0})
+	entries = append(entries, entry{widget.NewLauncher(st, len(commands), deck.Columns), 0})
 	return flow(entries)
 }
 

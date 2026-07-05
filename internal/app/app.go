@@ -17,6 +17,7 @@ import (
 	"github.com/kylesnowschwartz/gearshifter/internal/deck"
 	"github.com/kylesnowschwartz/gearshifter/internal/layout"
 	"github.com/kylesnowschwartz/gearshifter/internal/palette"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 	"github.com/kylesnowschwartz/gearshifter/internal/widget"
 )
 
@@ -27,15 +28,11 @@ const (
 	screenPalette
 )
 
-var (
-	wordmark = lipgloss.NewStyle().Bold(true).Reverse(true)
-	faint    = lipgloss.NewStyle().Faint(true)
-)
-
 // Model routes between the deck screen and the embedded palette.
 type Model struct {
 	commands []catalog.Command
 	order    []layout.Placement
+	styles   *theme.Styles
 	focus    int
 
 	screen  screen
@@ -49,9 +46,10 @@ type Model struct {
 }
 
 // New builds the app over a placed deck (layout.Default or, from P4, a
-// parsed layout.toml). Focus order = placement order.
-func New(commands []catalog.Command, placements []layout.Placement) Model {
-	return Model{commands: commands, order: placements}
+// parsed layout.toml). Focus order = placement order; st must be the
+// same registry the placements' tiles were built with.
+func New(commands []catalog.Command, placements []layout.Placement, st *theme.Styles) Model {
+	return Model{commands: commands, order: placements, styles: st}
 }
 
 func (m Model) Init() tea.Cmd { return nil }
@@ -198,7 +196,7 @@ func (m Model) activate(intent tea.Msg) (tea.Model, tea.Cmd) {
 // openPalette swaps in a fresh palette sized to the current canvas.
 func (m Model) openPalette() (tea.Model, tea.Cmd) {
 	m.screen = screenPalette
-	m.palette = palette.New(m.commands)
+	m.palette = palette.New(m.commands, m.styles.List)
 	updated, _ := m.palette.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 	m.palette = updated.(palette.Model)
 	return m, nil
@@ -254,11 +252,11 @@ func (m Model) compositor() *lipgloss.Compositor {
 	// plus the footer hint line.
 	margin := strings.Repeat(" ", marginX)
 	base := make([]string, 0, tileRows+2)
-	base = append(base, margin+wordmark.Render(" GEARSHIFTER "))
+	base = append(base, margin+m.styles.Chrome.Wordmark.Render(" GEARSHIFTER "))
 	for len(base) < tileRows+1 {
 		base = append(base, "")
 	}
-	base = append(base, margin+faint.Render("h/l tiles · j/k in gear · Enter fire · / all commands · Esc close"))
+	base = append(base, margin+m.styles.Chrome.Footer.Render("h/l tiles · j/k in gear · Enter fire · / all commands · Esc close"))
 	baseLayer := lipgloss.NewLayer(strings.Join(base, "\n")).X(0).Y(0).Z(0)
 
 	return lipgloss.NewCompositor(append([]*lipgloss.Layer{baseLayer}, layers...)...)
@@ -297,7 +295,7 @@ func (m Model) canvasTooSmall() bool {
 func (m Model) viewDeck() string {
 	if m.canvasTooSmall() {
 		w, h := m.minCanvas()
-		return strings.Repeat(" ", marginX) + faint.Render(fmt.Sprintf(
+		return strings.Repeat(" ", marginX) + m.styles.Chrome.Degraded.Render(fmt.Sprintf(
 			"canvas %d×%d is too small for this layout (needs %d×%d) — enlarge the popup",
 			m.width, m.height, w, h))
 	}

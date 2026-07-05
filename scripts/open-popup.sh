@@ -3,6 +3,7 @@
 # origin pane, honoring tmux user options at keypress time:
 #
 #   @gearshifter-layout   deck | telescope | /abs/path/layout.toml  (default: deck)
+#   @gearshifter-theme    default | plain                           (default: default)
 #   @gearshifter-width    popup width                               (default: 70%)
 #   @gearshifter-height   popup height                              (default: 75% — the deck needs ~21 rows)
 #
@@ -22,4 +23,4 @@ opt() {
 
 exec tmux display-popup -E \
   -w "$(opt @gearshifter-width 70%)" -h "$(opt @gearshifter-height 75%)" \
-  "\"$ROOT/bin/gearshifter\" pick --layout \"$(opt @gearshifter-layout deck)\" --pane \"$pane\" --cwd \"$cwd\""
+  "\"$ROOT/bin/gearshifter\" pick --layout \"$(opt @gearshifter-layout deck)\" --theme \"$(opt @gearshifter-theme default)\" --pane \"$pane\" --cwd \"$cwd\""

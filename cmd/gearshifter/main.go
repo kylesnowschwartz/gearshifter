@@ -17,6 +17,7 @@ import (
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 	"github.com/kylesnowschwartz/gearshifter/internal/layout"
 	"github.com/kylesnowschwartz/gearshifter/internal/palette"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 	"github.com/kylesnowschwartz/gearshifter/internal/tmux"
 )
 
@@ -35,7 +36,7 @@ const (
 const usage = `gearshifter — a tmux control deck for Claude Code slash commands
 
 Usage:
-  gearshifter pick --pane PANE [--cwd DIR] [--sources ...] [--layout NAME]
+  gearshifter pick --pane PANE [--cwd DIR] [--sources ...] [--layout NAME] [--theme NAME]
   gearshifter list [--cwd DIR] [--sources user,project,builtin,plugin]
   gearshifter inject --pane PANE [--no-enter] [--no-clear] TEXT
   gearshifter version
@@ -45,7 +46,8 @@ Subcommands:
            selecting a command injects it into the target pane and
            presses Enter. --layout picks the UI: deck (the tile grid,
            the default), telescope (fullscreen searchable palette), or a
-           path to a layout.toml (see examples/layout.toml).
+           path to a layout.toml (see examples/layout.toml). --theme
+           picks the color theme: default, or plain (no color).
   list     Print the available slash commands as TSV: name, source,
            argument hint, description. Default sources are
            user,project,builtin; add plugin explicitly to include
@@ -147,12 +149,17 @@ func runPick(args []string) error {
 	cwd := fs.String("cwd", "", "directory for project-scoped commands; pass the target pane's cwd")
 	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
 	layoutName := fs.String("layout", defaultLayout, "UI layout to open: telescope, deck, or a path to a layout.toml")
+	themeName := fs.String("theme", "default", "color theme: default, or plain (no color)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	inbuilt, layoutPath, err := resolveLayout(*layoutName)
 	if err != nil {
 		return err
+	}
+	styles, err := theme.Load(*themeName)
+	if err != nil {
+		return fmt.Errorf("pick: %w", err)
 	}
 	if os.Getenv("TMUX") == "" {
 		return fmt.Errorf("pick: must run inside tmux (use `just popup` or a keybinding)")
@@ -170,7 +177,7 @@ func runPick(args []string) error {
 		return err
 	}
 
-	pick, ok, err := runPickUI(inbuilt, layoutPath, cmds, client, *pane)
+	pick, ok, err := runPickUI(inbuilt, layoutPath, cmds, styles, client, *pane)
 	if err != nil {
 		return err
 	}
@@ -197,10 +204,10 @@ func resolveLayout(name string) (inbuilt, path string, err error) {
 
 // runPickUI runs the chosen layout's Bubble Tea program and reports the
 // user's selection; ok is false when they cancelled.
-func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, client *tmux.Client, pane string) (selection, bool, error) {
+func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, styles *theme.Styles, client *tmux.Client, pane string) (selection, bool, error) {
 	switch inbuilt {
 	case layoutTelescope:
-		final, err := tea.NewProgram(palette.New(cmds)).Run()
+		final, err := tea.NewProgram(palette.New(cmds, styles.List)).Run()
 		if err != nil {
 			return selection{}, false, fmt.Errorf("pick: %w", err)
 		}
@@ -215,10 +222,10 @@ func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, client *tmux.
 		panePID, _ := client.PanePID(pane)
 		paneCwd, _ := client.PaneCwd(pane)
 		state := provider.State(panePID, paneCwd)
-		placements := layout.Default(cmds, state)
+		placements := layout.Default(cmds, state, styles)
 		if layoutPath != "" {
 			var err error
-			placements, err = layout.Load(layoutPath, cmds, state)
+			placements, err = layout.Load(layoutPath, cmds, state, styles)
 			if err != nil {
 				// Popup stderr is invisible; a broken layout must fail
 				// with words in the tmux status line (M2 lesson).
@@ -226,7 +233,7 @@ func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, client *tmux.
 				return selection{}, false, fmt.Errorf("pick: %w", err)
 			}
 		}
-		final, err := tea.NewProgram(app.New(cmds, placements)).Run()
+		final, err := tea.NewProgram(app.New(cmds, placements, styles)).Run()
 		if err != nil {
 			return selection{}, false, fmt.Errorf("pick: %w", err)
 		}

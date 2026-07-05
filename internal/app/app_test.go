@@ -10,7 +10,10 @@ import (
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 	"github.com/kylesnowschwartz/gearshifter/internal/deck"
 	"github.com/kylesnowschwartz/gearshifter/internal/layout"
+	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 )
+
+var testStyles = theme.Plain()
 
 func testCommands() []catalog.Command {
 	return []catalog.Command{
@@ -26,7 +29,7 @@ func newTestModel() Model {
 	// haiku/low: cursors start on current (index 0), keeping key-walk
 	// expectations simple.
 	cmds := testCommands()
-	m := New(cmds, layout.Default(cmds, agent.State{Model: "haiku", Effort: "low"}))
+	m := New(cmds, layout.Default(cmds, agent.State{Model: "haiku", Effort: "low"}, testStyles), testStyles)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 20})
 	return updated.(Model)
 }
@@ -219,7 +222,7 @@ func TestTinyCanvasDegradesToMessageAndInertInput(t *testing.T) {
 }
 
 func TestEmptyDeckNeverPanics(t *testing.T) {
-	m := New(nil, nil) // no placements: inert but alive, quit keys work
+	m := New(nil, nil, testStyles) // no placements: inert but alive, quit keys work
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 20})
 	m = updated.(Model)
 	m = press(m, "l", "j", "enter")
