@@ -156,7 +156,11 @@ func runPick(args []string) error {
 	switch *layout {
 	case layoutDeck:
 		home, _ := os.UserHomeDir()
-		final, err := tea.NewProgram(app.New(cmds, catalog.ReadGearState(home))).Run()
+		// Session-specific model when the pane's Claude session is
+		// resolvable; global settings otherwise (V7/P3.5, M3-DECK.md).
+		panePID, _ := client.PanePID(*pane)
+		paneCwd, _ := client.PaneCwd(*pane)
+		final, err := tea.NewProgram(app.New(cmds, catalog.SessionGearState(home, panePID, paneCwd))).Run()
 		if err != nil {
 			return fmt.Errorf("pick: %w", err)
 		}

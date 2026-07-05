@@ -79,3 +79,27 @@ func TestInjectValidation(t *testing.T) {
 		t.Error("empty text accepted")
 	}
 }
+
+type cannedRunner struct {
+	out      string
+	lastArgs []string
+}
+
+func (r *cannedRunner) Run(stdin string, args ...string) (string, error) {
+	r.lastArgs = args
+	return r.out, nil
+}
+
+func TestPanePID(t *testing.T) {
+	r := &cannedRunner{out: "12345"}
+	pid, err := NewClient(r).PanePID("%7")
+	if err != nil || pid != 12345 {
+		t.Errorf("PanePID = %d, %v; want 12345", pid, err)
+	}
+	if got := strings.Join(r.lastArgs, " "); got != "display-message -p -t %7 #{pane_pid}" {
+		t.Errorf("argv = %q", got)
+	}
+	if _, err := NewClient(&cannedRunner{out: "not-a-pid"}).PanePID("%7"); err == nil {
+		t.Error("garbage pid output must error")
+	}
+}

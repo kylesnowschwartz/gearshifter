@@ -7,6 +7,7 @@ package tmux
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -95,6 +96,20 @@ func (c *Client) PaneCwd(pane string) (string, error) {
 		return "", fmt.Errorf("pane %s not found", pane)
 	}
 	return out, nil
+}
+
+// PanePID returns the target pane's shell process id — the root of the
+// process tree that contains the pane's Claude session (V7 P3.5).
+func (c *Client) PanePID(pane string) (int, error) {
+	out, err := c.run.Run("", "display-message", "-p", "-t", pane, "#{pane_pid}")
+	if err != nil {
+		return 0, err
+	}
+	pid, err := strconv.Atoi(out)
+	if err != nil {
+		return 0, fmt.Errorf("pane %s: bad pid %q", pane, out)
+	}
+	return pid, nil
 }
 
 // PaneExists reports whether the target pane is still alive — the sanity
