@@ -64,15 +64,12 @@ type Styles struct {
 	List     ListStyles
 }
 
-// ButtonStyles renders a button tile: bordered box, centered label,
-// dim /command sublabel. Armed is the ~150ms press frame between fire
-// and popup close (P2) — the one moment a tile fills.
+// ButtonStyles renders a button tile: one big centered label with the
+// /command spliced into the bottom border as a nameplate (superfile's
+// border-embedded info slot — promoted from experiment 2026-07-05), so
+// buttons hand-roll their frame like gears do. Armed is the ~150ms
+// press frame between fire and popup close (P2).
 type ButtonStyles struct {
-	Box      lipgloss.Style
-	BoxFocus lipgloss.Style
-	// NAMEPLATE EXPERIMENT (this branch only): buttons hand-roll their
-	// frame to splice the /command into the bottom border, so they need
-	// gear-style charsets + frame colors.
 	Border      lipgloss.Border
 	BorderFocus lipgloss.Border
 	Frame       lipgloss.Style
@@ -80,7 +77,7 @@ type ButtonStyles struct {
 	Label       lipgloss.Style
 	LabelFocus  lipgloss.Style
 	LabelArmed  lipgloss.Style
-	Sub         lipgloss.Style
+	Sub         lipgloss.Style // the nameplate text
 }
 
 // GearStyles renders a gear tile: hand-rolled frame (title embedded in
@@ -138,8 +135,6 @@ func New(p Palette) *Styles {
 		Background: p.BgBase,
 		Foreground: p.FgBase,
 		Button: ButtonStyles{
-			Box:         box,
-			BoxFocus:    boxFocus,
 			Border:      lipgloss.NormalBorder(),
 			BorderFocus: lipgloss.NormalBorder(),
 			Frame:       lipgloss.NewStyle().Foreground(p.Border),
@@ -192,8 +187,6 @@ func Plain() *Styles {
 	armed := lipgloss.NewStyle().Reverse(true).Bold(true)
 	return &Styles{
 		Button: ButtonStyles{
-			Box:         lipgloss.NewStyle().Border(lipgloss.NormalBorder()),
-			BoxFocus:    lipgloss.NewStyle().Border(lipgloss.DoubleBorder()),
 			Border:      lipgloss.NormalBorder(),
 			BorderFocus: lipgloss.DoubleBorder(),
 			Frame:       none,

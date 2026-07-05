@@ -100,7 +100,8 @@ func center(s string, width int) string {
 	return strings.Repeat(" ", left) + s + strings.Repeat(" ", width-w-left)
 }
 
-// Button fires a slash command: big centered label, dim /command sublabel.
+// Button fires a slash command: big centered label, /command nameplate
+// in the bottom border.
 type Button struct {
 	Cmd    catalog.Command
 	Label  string
@@ -120,8 +121,8 @@ func (b Button) WithInsert() Button {
 }
 
 // buttonContentRows: one big centered label; the /command lives in the
-// bottom border (NAMEPLATE EXPERIMENT — superfile's border-embedded
-// info slot returns the sublabel row, tui-research/02 §3).
+// bottom border, which bought back the old sublabel row (superfile's
+// border-embedded info slot, tui-research/02 §3; promoted 2026-07-05).
 const buttonContentRows = 1
 
 func (b Button) Activate() tea.Msg { return TileActivatedMsg{Command: b.Cmd, Insert: b.Insert} }
