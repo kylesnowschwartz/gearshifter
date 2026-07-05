@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -28,6 +29,16 @@ const (
 	screenPalette
 )
 
+// pressFrameDuration is the armed flash between firing a tile and the
+// popup closing — long enough to read as a press, short enough to never
+// feel like lag (P2; Textual's press animation is the prior art,
+// TUI-AESTHETICS.md §6).
+const pressFrameDuration = 150 * time.Millisecond
+
+// pressFrameDoneMsg ends the armed frame; the app quits and the caller
+// injects the recorded selection.
+type pressFrameDoneMsg struct{}
+
 // Model routes between the deck screen and the embedded palette.
 type Model struct {
 	commands []catalog.Command
@@ -37,6 +48,7 @@ type Model struct {
 
 	screen  screen
 	palette palette.Model
+	armed   bool // inside the press frame: input is inert, the tick quits
 	width   int
 	height  int
 
@@ -83,6 +95,12 @@ func (m Model) View() tea.View {
 // always work; everything else is gated once, here, so a degraded canvas
 // (or an empty deck) can never focus, fire, or hit an invisible tile.
 func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(pressFrameDoneMsg); ok {
+		return m, tea.Quit
+	}
+	if m.armed {
+		return m, nil // the press frame owns the screen; its tick quits
+	}
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		switch key.String() {
 		case "ctrl+c", "esc", "q":
@@ -181,16 +199,23 @@ func (m Model) activate(intent tea.Msg) (tea.Model, tea.Cmd) {
 		sel := intent.Command
 		m.selected = &sel
 		m.insertOnly = intent.Insert
-		return m, tea.Quit
+		return m.arm()
 	case widget.GearShiftedMsg:
 		sel := intent.Command
 		m.selected = &sel
 		m.arg = intent.Value
-		return m, tea.Quit
+		return m.arm()
 	case widget.ScreenRequestedMsg:
 		return m.openPalette()
 	}
 	return m, nil
+}
+
+// arm starts the press frame: the fired tile flashes armed for
+// pressFrameDuration, then the tick quits and the selection injects.
+func (m Model) arm() (tea.Model, tea.Cmd) {
+	m.armed = true
+	return m, tea.Tick(pressFrameDuration, func(time.Time) tea.Msg { return pressFrameDoneMsg{} })
 }
 
 // openPalette swaps in a fresh palette sized to the current canvas.
@@ -240,7 +265,8 @@ func (m Model) compositor() *lipgloss.Compositor {
 	layers := make([]*lipgloss.Layer, 0, len(m.order)+1)
 	for i, p := range m.order {
 		x, w := grid.Cell(p.Col, p.Tile.Span())
-		layers = append(layers, lipgloss.NewLayer(p.Tile.View(i == m.focus, w)).
+		rs := widget.RenderState{Focused: i == m.focus, Armed: m.armed && i == m.focus}
+		layers = append(layers, lipgloss.NewLayer(p.Tile.View(rs, w)).
 			ID("tile:"+strconv.Itoa(i)).X(marginX+x).Y(p.Y).Z(1))
 		if bottom := p.Y + p.Tile.Rows(); bottom > tileRows {
 			tileRows = bottom

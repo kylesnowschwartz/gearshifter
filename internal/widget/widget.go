@@ -35,13 +35,21 @@ type GearShiftedMsg struct {
 // ScreenRequestedMsg asks the app to swap screens (Launcher → palette).
 type ScreenRequestedMsg struct{}
 
+// RenderState is what a tile needs to know about itself to render:
+// whether it holds the focus ring, and whether it is inside the armed
+// press frame (the ~150ms flash between fire and popup close, P2).
+type RenderState struct {
+	Focused bool
+	Armed   bool
+}
+
 // Tile is a deck widget. P0 tiles are passive views the app activates;
 // tiles with interactive innards (Gear) arrive in M3 P2.
 type Tile interface {
 	// Activate returns the tile's Enter/click intent.
 	Activate() tea.Msg
 	// View renders the tile at exactly width cells.
-	View(focused bool, width int) string
+	View(rs RenderState, width int) string
 	// Span is the tile's width in grid columns.
 	Span() int
 	// Rows is the tile's height in cells.
@@ -118,15 +126,19 @@ func (b Button) Activate() tea.Msg { return TileActivatedMsg{Command: b.Cmd, Ins
 func (b Button) Span() int         { return b.span }
 func (b Button) Rows() int         { return borderRows + buttonContentRows }
 
-func (b Button) View(focused bool, width int) string {
+func (b Button) View(rs RenderState, width int) string {
 	st := b.styles.Button
 	inner := width - borderCols
 	label := center(b.Label, inner)
 	boxStyle := st.Box
-	if focused {
+	switch {
+	case rs.Armed:
+		label = st.LabelArmed.Render(label)
+		boxStyle = st.BoxFocus
+	case rs.Focused:
 		label = st.LabelFocus.Render(label)
 		boxStyle = st.BoxFocus
-	} else {
+	default:
 		label = st.Label.Render(label)
 	}
 	sub := st.Sub.Render(center("/"+b.Cmd.Name, inner))
@@ -216,31 +228,33 @@ func (g Gear) ValueAt(rowInTile int) (int, bool) {
 }
 
 // View hand-rolls the box so the label embeds in the top border
-// (┌ MODEL ───┐, mock D chrome); border charset matches the lipgloss
-// Normal/Double borders the buttons use. Border chars and the inner
-// value line are styled as separate sequential segments — never nested
-// (M2 gotcha) — so the frame can carry its own color.
-func (g Gear) View(focused bool, width int) string {
+// (┌ MODEL ───┐, mock D chrome); the frame charset comes from the theme
+// (colored themes signal focus by border color alone, plain swaps to
+// the double charset). Border chars and the inner value line are styled
+// as separate sequential segments — never nested (M2 gotcha) — so the
+// frame can carry its own color.
+func (g Gear) View(rs RenderState, width int) string {
 	st := g.styles.Gear
-	h, v, tl, tr, bl, br := "─", "│", "┌", "┐", "└", "┘"
-	frame := st.Frame
-	if focused {
-		h, v, tl, tr, bl, br = "═", "║", "╔", "╗", "╚", "╝"
-		frame = st.FrameFocus
+	chars, frame := st.Border, st.Frame
+	if rs.Focused || rs.Armed {
+		chars, frame = st.BorderFocus, st.FrameFocus
 	}
-	side := frame.Render(v)
+	side := frame.Render(chars.Left)
 	inner := width - borderCols
 	title := truncate(" "+g.Label+" ", max(0, inner))
-	rows := []string{frame.Render(tl + title + strings.Repeat(h, max(0, inner-lipgloss.Width(title))) + tr)}
+	rows := []string{frame.Render(chars.TopLeft + title +
+		strings.Repeat(chars.Top, max(0, inner-lipgloss.Width(title))) + chars.TopRight)}
 	for i, val := range g.Values {
-		mark := "  "
+		mark := theme.MarkBlank
 		if i == g.current {
-			mark = "▐ " // the session's current value (V7 fills this in)
+			mark = theme.MarkCurrent // the session's current value (V7 fills this in)
 		}
 		line := mark + val
 		line += strings.Repeat(" ", max(0, inner-lipgloss.Width(line)))
 		switch {
-		case focused && i == g.cursor:
+		case rs.Armed && i == g.cursor:
+			line = st.ValueArmed.Render(line)
+		case rs.Focused && i == g.cursor:
 			line = st.ValueCursor.Render(line)
 		case i == g.current:
 			line = st.ValueCurrent.Render(line)
@@ -249,7 +263,7 @@ func (g Gear) View(focused bool, width int) string {
 		}
 		rows = append(rows, side+line+side)
 	}
-	rows = append(rows, frame.Render(bl+strings.Repeat(h, inner)+br))
+	rows = append(rows, frame.Render(chars.BottomLeft+strings.Repeat(chars.Bottom, inner)+chars.BottomRight))
 	return strings.Join(rows, "\n")
 }
 
@@ -272,12 +286,12 @@ func (l Launcher) Activate() tea.Msg { return ScreenRequestedMsg{} }
 func (l Launcher) Span() int         { return l.span }
 func (l Launcher) Rows() int         { return borderRows + launcherContentRows }
 
-func (l Launcher) View(focused bool, width int) string {
+func (l Launcher) View(rs RenderState, width int) string {
 	st := l.styles.Launcher
 	inner := width - borderCols
 	label := " ALL COMMANDS…"
 	boxStyle := st.Box
-	if focused {
+	if rs.Focused { // no armed frame: the launcher swaps screens, it doesn't fire
 		label = st.LabelFocus.Render(label)
 		boxStyle = st.BoxFocus
 	} else {

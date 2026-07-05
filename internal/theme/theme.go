@@ -15,6 +15,14 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Curated single-width glyphs, defined next to the styles (Crush
+// icon-table pattern, TUI-AESTHETICS.md §8): one place to see the
+// deck's entire ornament vocabulary.
+const (
+	MarkCurrent = "▐ " // gear row: the session's live value
+	MarkBlank   = "  " // gear row: everything else
+)
+
 // Palette is the role layer: every color the UI may use, by semantic
 // role. Hierarchy comes from the fg/bg ramps (base → subtle → muted),
 // not one-off values; the bg ramp and OnAccent are reserved for the P2
@@ -49,24 +57,32 @@ type Styles struct {
 }
 
 // ButtonStyles renders a button tile: bordered box, centered label,
-// dim /command sublabel.
+// dim /command sublabel. Armed is the ~150ms press frame between fire
+// and popup close (P2) — the one moment a tile fills.
 type ButtonStyles struct {
 	Box        lipgloss.Style
 	BoxFocus   lipgloss.Style
 	Label      lipgloss.Style
 	LabelFocus lipgloss.Style
+	LabelArmed lipgloss.Style
 	Sub        lipgloss.Style
 }
 
 // GearStyles renders a gear tile: hand-rolled frame (title embedded in
 // the top border) over one row per value. Rows are styled once each —
-// nested styles reset ANSI mid-row (M2 gotcha).
+// nested styles reset ANSI mid-row (M2 gotcha). The frame charset is a
+// theme decision: colored themes signal focus by border color alone
+// (the unanimous idiom, TUI-AESTHETICS.md §4); plain has no color, so
+// it swaps to the double charset instead.
 type GearStyles struct {
-	Frame        lipgloss.Style // border chars, idle
-	FrameFocus   lipgloss.Style // border chars, focused
-	Value        lipgloss.Style // plain value row
-	ValueCursor  lipgloss.Style // j/k cursor row
-	ValueCurrent lipgloss.Style // the session's live value (▐ mark row)
+	Border       lipgloss.Border // frame charset, idle
+	BorderFocus  lipgloss.Border // frame charset, focused
+	Frame        lipgloss.Style  // border chars, idle
+	FrameFocus   lipgloss.Style  // border chars, focused
+	Value        lipgloss.Style  // plain value row
+	ValueCursor  lipgloss.Style  // j/k cursor row
+	ValueCurrent lipgloss.Style  // the session's live value (▐ mark row)
+	ValueArmed   lipgloss.Style  // the committed row during the press frame
 }
 
 // LauncherStyles renders the full-width launcher bar.
@@ -94,28 +110,33 @@ type ListStyles struct {
 }
 
 // New derives the full style registry from a palette. Attribute
-// semantics (bold current value, reversed cursor/focus, border charset
-// swap on focus) are fixed here; palettes decide only color.
+// semantics (bold current value, reversed cursor, color-only focus,
+// bg-fill armed frame) are fixed here; palettes decide only color.
 func New(p Palette) *Styles {
 	fgBase := lipgloss.NewStyle().Foreground(p.FgBase)
 	fgMuted := lipgloss.NewStyle().Foreground(p.FgMuted)
 	box := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(p.Border)
-	boxFocus := lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(p.BorderFocus)
+	boxFocus := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(p.BorderFocus)
 	labelFocus := lipgloss.NewStyle().Foreground(p.Accent).Reverse(true)
+	armed := lipgloss.NewStyle().Bold(true).Foreground(p.OnAccent).Background(p.Accent)
 	return &Styles{
 		Button: ButtonStyles{
 			Box:        box,
 			BoxFocus:   boxFocus,
 			Label:      fgBase,
 			LabelFocus: labelFocus,
+			LabelArmed: armed,
 			Sub:        fgMuted,
 		},
 		Gear: GearStyles{
+			Border:       lipgloss.NormalBorder(),
+			BorderFocus:  lipgloss.NormalBorder(),
 			Frame:        lipgloss.NewStyle().Foreground(p.Border),
 			FrameFocus:   lipgloss.NewStyle().Foreground(p.BorderFocus),
 			Value:        lipgloss.NewStyle().Foreground(p.FgSubtle),
 			ValueCursor:  lipgloss.NewStyle().Reverse(true),
 			ValueCurrent: lipgloss.NewStyle().Bold(true).Foreground(p.Mark),
+			ValueArmed:   armed,
 		},
 		Launcher: LauncherStyles{
 			Box:        box,
@@ -139,27 +160,33 @@ func New(p Palette) *Styles {
 }
 
 // Plain is the colorless registry: the exact attribute-only styles the
-// deck rendered before the theme seam (bold/faint/reverse, uncolored
-// borders). It is the behavior-freeze reference and the reduced-
-// decoration path (TUI-AESTHETICS.md accessibility note).
+// deck rendered before the theme seam (bold/faint/reverse), and the
+// reduced-decoration path (TUI-AESTHETICS.md accessibility note). With
+// no color to spend, focus keeps the double-border charset swap and
+// armed is a bold reverse flash.
 func Plain() *Styles {
 	faint := lipgloss.NewStyle().Faint(true)
 	none := lipgloss.NewStyle()
 	reversed := lipgloss.NewStyle().Reverse(true)
+	armed := lipgloss.NewStyle().Reverse(true).Bold(true)
 	return &Styles{
 		Button: ButtonStyles{
 			Box:        lipgloss.NewStyle().Border(lipgloss.NormalBorder()),
 			BoxFocus:   lipgloss.NewStyle().Border(lipgloss.DoubleBorder()),
 			Label:      none,
 			LabelFocus: reversed,
+			LabelArmed: armed,
 			Sub:        faint,
 		},
 		Gear: GearStyles{
+			Border:       lipgloss.NormalBorder(),
+			BorderFocus:  lipgloss.DoubleBorder(),
 			Frame:        none,
 			FrameFocus:   none,
 			Value:        none,
 			ValueCursor:  reversed,
 			ValueCurrent: lipgloss.NewStyle().Bold(true),
+			ValueArmed:   armed,
 		},
 		Launcher: LauncherStyles{
 			Box:        lipgloss.NewStyle().Border(lipgloss.NormalBorder()),

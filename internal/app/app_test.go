@@ -65,6 +65,28 @@ func TestFocusWalksAndEnterFires(t *testing.T) {
 	}
 }
 
+// Firing a tile enters the press frame: the selection is recorded
+// immediately, input goes inert for the flash, and the frame's tick —
+// not the keypress — quits the program (P2).
+func TestPressFrameArmsThenQuits(t *testing.T) {
+	m := press(newTestModel(), "l", "l", "enter") // fire COMPACT
+	if !m.armed {
+		t.Fatal("firing a tile must enter the press frame")
+	}
+	m = press(m, "l", "enter", "esc") // all inert inside the frame
+	if !m.armed || m.focus != 2 {
+		t.Error("input during the press frame must be swallowed")
+	}
+	updated, cmd := m.Update(pressFrameDoneMsg{})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("the press-frame tick must quit")
+	}
+	if sel, ok := m.Selection(); !ok || sel.Name != "compact" {
+		t.Errorf("selection must survive the frame, got %v %v", sel.Name, ok)
+	}
+}
+
 func TestFocusWraps(t *testing.T) {
 	m := press(newTestModel(), "h", "enter") // wrap back to the launcher bar
 	if m.screen != screenPalette {

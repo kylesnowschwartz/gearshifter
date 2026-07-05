@@ -88,7 +88,7 @@ values  = ["haiku", "sonnet"]
 	if err != nil {
 		t.Fatal(err)
 	}
-	if view := placements[0].Tile.View(false, 20); !strings.Contains(view, "▐ sonnet") {
+	if view := placements[0].Tile.View(widget.RenderState{}, 20); !strings.Contains(view, "▐ sonnet") {
 		t.Errorf("gear must mark the live value from state:\n%s", view)
 	}
 }
@@ -145,7 +145,7 @@ func TestKyleLayoutLoads(t *testing.T) {
 	if !goal.Insert {
 		t.Error("GOAL must be an insert-only button (always takes a condition)")
 	}
-	if view := style.View(false, 24); !strings.Contains(view, "▐ mayo-clinic") {
+	if view := style.View(widget.RenderState{}, 24); !strings.Contains(view, "▐ mayo-clinic") {
 		t.Errorf("STYLE gear must mark the live output style:\n%s", view)
 	}
 }

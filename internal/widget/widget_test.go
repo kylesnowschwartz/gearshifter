@@ -80,16 +80,16 @@ func TestThemedTileGeometryMatchesPlain(t *testing.T) {
 		{"launcher", NewLauncher(testStyles, 42, 13), NewLauncher(themed, 42, 13)},
 	}
 	for _, p := range pairs {
-		for _, focused := range []bool{false, true} {
-			a := strings.Split(p.plain.View(focused, 20), "\n")
-			b := strings.Split(p.color.View(focused, 20), "\n")
+		for _, rs := range []RenderState{{}, {Focused: true}, {Focused: true, Armed: true}} {
+			a := strings.Split(p.plain.View(rs, 20), "\n")
+			b := strings.Split(p.color.View(rs, 20), "\n")
 			if len(a) != len(b) {
-				t.Errorf("%s focused=%v: row count %d vs %d", p.name, focused, len(a), len(b))
+				t.Errorf("%s %+v: row count %d vs %d", p.name, rs, len(a), len(b))
 				continue
 			}
 			for i := range a {
 				if wa, wb := lipgloss.Width(a[i]), lipgloss.Width(b[i]); wa != wb {
-					t.Errorf("%s focused=%v row %d: width %d vs %d", p.name, focused, i, wa, wb)
+					t.Errorf("%s %+v row %d: width %d vs %d", p.name, rs, i, wa, wb)
 				}
 			}
 		}
@@ -97,7 +97,7 @@ func TestThemedTileGeometryMatchesPlain(t *testing.T) {
 }
 
 func TestGearViewMarksCurrent(t *testing.T) {
-	view := modelGear().WithCurrent("opus").View(false, 20)
+	view := modelGear().WithCurrent("opus").View(RenderState{}, 20)
 	for _, line := range strings.Split(view, "\n") {
 		if strings.Contains(line, "opus") && !strings.Contains(line, "▐") {
 			t.Error("current value row must carry the ▐ mark")
