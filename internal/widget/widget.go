@@ -56,6 +56,17 @@ type Tile interface {
 	Rows() int
 }
 
+// Remarkable is a tile that displays a live setting (both gear forms):
+// the strip's refresh loop re-marks it through this seam, so the
+// dedup-then-remark policy exists once, never per concrete type.
+type Remarkable interface {
+	Tile
+	// SettingName keys the tile into the polled settings map.
+	SettingName() string
+	// Remark returns the tile re-marked with a fresh live value.
+	Remark(value string) Tile
+}
+
 // borderRows/borderCols are the chrome every tile pays: top + bottom
 // border rows, left + right border columns.
 const (
@@ -117,10 +128,11 @@ func (f tileFrame) row(content string) string {
 	return side + content + side
 }
 
-// truncate cuts s to at most width display cells. Rune-count slicing
+// Truncate cuts s to at most width display cells. Rune-count slicing
 // would overflow the tile on wide runes (CJK/emoji labels from a user
-// layout.toml) and desync the compositor's hit-testing.
-func truncate(s string, width int) string {
+// layout.toml) and desync the compositor's hit-testing. Exported as the
+// ONE cell-truncation helper — app's footer clips through it too.
+func Truncate(s string, width int) string {
 	if lipgloss.Width(s) <= width {
 		return s
 	}
@@ -137,11 +149,34 @@ func truncate(s string, width int) string {
 	return b.String()
 }
 
+// matchValue finds which value a live setting names: exact match wins,
+// else the first value the setting CONTAINS (model IDs like
+// "claude-fable-5" contain "fable"); -1 when nothing matches. The one
+// matching rule for both gear forms — it has been patched before
+// (5b76058), and a fix must never land in one form only.
+func matchValue(values []string, setting string) int {
+	setting = strings.ToLower(setting)
+	if setting == "" {
+		return -1
+	}
+	match := -1
+	for i, v := range values {
+		v = strings.ToLower(v)
+		if setting == v {
+			return i
+		}
+		if match == -1 && strings.Contains(setting, v) {
+			match = i
+		}
+	}
+	return match
+}
+
 // center pads s to exactly width cells, centered. Rows are styled AFTER
 // padding, one style per full row (nested styles reset ANSI mid-row — M2
 // gotcha). Cell math via lipgloss.Width — labels contain multibyte runes.
 func center(s string, width int) string {
-	s = truncate(s, max(0, width))
+	s = Truncate(s, max(0, width))
 	w := lipgloss.Width(s)
 	left := (width - w) / 2
 	return strings.Repeat(" ", left) + s + strings.Repeat(" ", width-w-left)
@@ -202,7 +237,7 @@ func (b Button) View(rs RenderState, width int) string {
 	// The nameplate truncates before it disappears: a button must show
 	// which command it fires (review finding — the old sublabel always
 	// did), so only a tile too narrow for any identity drops it.
-	plate := truncate(" /"+b.Cmd.Name+" ", max(0, f.inner-nameplateJoints))
+	plate := Truncate(" /"+b.Cmd.Name+" ", max(0, f.inner-nameplateJoints))
 	bottom := f.bottom()
 	if lipgloss.Width(plate) >= nameplateMin {
 		bottom = f.nameplateBottom(plate, st.Sub)
@@ -258,32 +293,19 @@ func (g Gear) WithCursor(i int) Gear {
 
 // WithCurrent marks the session's live value (▐ + bold) and starts the
 // cursor there. Settings values come in several shapes — "opus" but also
-// "claude-fable-5[1m]" — so an exact match wins first, then a value that
-// appears inside the setting (case-insensitive; exact-first keeps "opus"
-// from being claimed by a value like "o"). No match = stateless render.
+// "claude-fable-5[1m]" — matchValue's exact-first-then-contains rule
+// handles both (shared with GearChip). No match = stateless render.
 func (g Gear) WithCurrent(setting string) Gear {
-	g.current = -1
-	setting = strings.ToLower(setting)
-	if setting == "" {
-		return g
-	}
-	match := -1
-	for i, v := range g.Values {
-		v = strings.ToLower(v)
-		if setting == v {
-			match = i
-			break
-		}
-		if match == -1 && strings.Contains(setting, v) {
-			match = i
-		}
-	}
-	if match >= 0 {
-		g.current = match
-		g.cursor = match
+	g.current = matchValue(g.Values, setting)
+	if g.current >= 0 {
+		g.cursor = g.current
 	}
 	return g
 }
+
+// SettingName / Remark implement Remarkable for the refresh loop.
+func (g Gear) SettingName() string      { return g.Cmd.Name }
+func (g Gear) Remark(value string) Tile { return g.WithCurrent(value) }
 
 // ValueAt maps a row offset inside the tile (0 = top border) to a value
 // index, for mouse hits.
@@ -297,7 +319,7 @@ func (g Gear) ValueAt(rowInTile int) (int, bool) {
 func (g Gear) View(rs RenderState, width int) string {
 	st := g.styles.Gear
 	f := newTileFrame(st.FrameStyles, rs, width)
-	rows := []string{f.titledTop(truncate(" "+g.Label+" ", f.inner))}
+	rows := []string{f.titledTop(Truncate(" "+g.Label+" ", f.inner))}
 	for i, val := range g.Values {
 		mark := theme.MarkBlank
 		if i == g.current {
@@ -306,7 +328,7 @@ func (g Gear) View(rs RenderState, width int) string {
 		// Truncate before padding: an over-wide value from a user
 		// layout.toml would bleed past the tile and desync the
 		// compositor's hit-testing (review finding).
-		line := truncate(mark+val, f.inner)
+		line := Truncate(mark+val, f.inner)
 		line += strings.Repeat(" ", max(0, f.inner-lipgloss.Width(line)))
 		switch {
 		case rs.Armed && i == g.cursor:
@@ -361,7 +383,7 @@ func (l Launcher) View(rs RenderState, width int) string {
 	if gap := f.inner - lipgloss.Width(label) - lipgloss.Width(count); gap >= 0 {
 		line = labelStyle.Render(label) + strings.Repeat(" ", gap) + st.Count.Render(count)
 	} else {
-		label = truncate(label, f.inner)
+		label = Truncate(label, f.inner)
 		line = labelStyle.Render(label) + strings.Repeat(" ", max(0, f.inner-lipgloss.Width(label)))
 	}
 	return f.top() + "\n" + f.row(line) + "\n" + f.bottom()

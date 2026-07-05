@@ -178,3 +178,30 @@ func TestHoverMovesCursor(t *testing.T) {
 		t.Error("palette must request AllMotion — hover needs bare-motion events")
 	}
 }
+
+// Pointer events are bounded by what View RENDERED, not the whole
+// filtered list — a click on the footer line used to fire visible[18],
+// a command the user never saw (review 2026-07-06).
+func TestPointerBoundedByRenderedRows(t *testing.T) {
+	cmds := make([]catalog.Command, 30)
+	for i := range cmds {
+		cmds[i] = catalog.Command{Name: strings.Repeat("x", i+1)}
+	}
+	m := New(cmds, theme.Plain())
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 6}) // pageSize 4: rows y=1..4, footer y=5
+	m = updated.(Model)
+
+	updated, _ = m.Update(tea.MouseClickMsg{X: 2, Y: 5, Button: tea.MouseLeft})
+	if _, ok := updated.(Model).Selection(); ok {
+		t.Error("a click on the footer must not fire an off-screen row")
+	}
+	updated, _ = m.Update(tea.MouseMotionMsg{X: 2, Y: 5})
+	if c := updated.(Model).cursor; c != 0 {
+		t.Errorf("hover on the footer must not move the cursor off-screen, got %d", c)
+	}
+	// The last rendered row is still clickable.
+	updated, _ = m.Update(tea.MouseClickMsg{X: 2, Y: 4, Button: tea.MouseLeft})
+	if sel, ok := updated.(Model).Selection(); !ok || sel.Name != "xxxx" {
+		t.Errorf("click on the last rendered row selected %v, want xxxx", sel.Name)
+	}
+}

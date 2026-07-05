@@ -26,25 +26,29 @@ const (
 
 // glyphs maps command names to their compact-chip glyph (STRIP-EMBED
 // step 2). Curated: every entry must render exactly one cell (pinned by
-// test) and avoid emoji presentation (VS16 forces two cells in most
-// terminals). Coverage beyond width is Kyle's-eyeball territory — a
-// glyph a font lacks shows as tofu, not a layout break.
+// test), avoid emoji presentation (VS16 forces two cells in most
+// terminals), and be East_Asian_Width Neutral/Narrow — Ambiguous
+// codepoints paint two cells on ambiguous-wide terminals (CJK configs),
+// shifting every chip after them (review 2026-07-06 swapped out
+// ▣ ◆ ¤ ▤ ⚿ for exactly that). Coverage beyond width is
+// Kyle's-eyeball territory — a glyph a font lacks shows as tofu, not a
+// layout break.
 var glyphs = map[string]string{
-	"compact":        "▣",
+	"compact":        "⊟",
 	"copy":           "⧉",
 	"clear":          "⌫",
 	"context":        "◔",
 	"resume":         "↻",
 	"config":         "⚙",
 	"agents":         "✦",
-	"memory":         "◆",
-	"cost":           "¤",
+	"memory":         "⧫",
+	"cost":           "$",
 	"doctor":         "✚",
 	"export":         "↥",
-	"statusline":     "▤",
+	"statusline":     "≣",
 	"hooks":          "⌁",
 	"mcp":            "⬡",
-	"permissions":    "⚿",
+	"permissions":    "⚷",
 	"reload-plugins": "⟳",
 }
 
@@ -57,17 +61,6 @@ func Glyph(name string) string {
 		return g
 	}
 	return GlyphFallback
-}
-
-// GlyphNames lists every command in the glyph table (width test +
-// future docs).
-func GlyphNames() []string {
-	names := make([]string, 0, len(glyphs))
-	for n := range glyphs {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	return names
 }
 
 // Palette is the role layer: every color the UI may use, by semantic

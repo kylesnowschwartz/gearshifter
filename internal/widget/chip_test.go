@@ -95,6 +95,29 @@ func TestGearChipExpandAndHitGeometry(t *testing.T) {
 	}
 }
 
+// A too-narrow grant truncates the expanded row at a value boundary
+// with an ellipsis — never an overflow past the granted width (review
+// 2026-07-06: clipped values used to render past the layer, invisible
+// but firable with no hint they existed).
+func TestGearChipExpandedTruncatesAtValueBoundary(t *testing.T) {
+	g := modelGearChip().WithCurrent("opus").Expand()
+	full := g.NaturalWidth()
+	w := full - 3 // cuts the last value (fable)
+	view := g.View(RenderState{Focused: true}, w)
+	if lw := lipgloss.Width(view); lw != w {
+		t.Errorf("granted %d cells, rendered %d — the row must never overflow", w, lw)
+	}
+	if !strings.Contains(view, "…") {
+		t.Errorf("a cut row must mark the clip: %q", view)
+	}
+	if strings.Contains(view, "fable") {
+		t.Errorf("a value that doesn't fit must not render partially: %q", view)
+	}
+	if v := g.View(RenderState{Focused: true}, full); strings.Contains(v, "…") {
+		t.Error("a full-width row must not show the clip mark")
+	}
+}
+
 func TestGearChipCursorWrapsAndFires(t *testing.T) {
 	g := modelGearChip().WithCurrent("haiku").Expand()
 	g = g.CursorPrev() // wraps to fable

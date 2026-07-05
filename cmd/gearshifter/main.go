@@ -247,27 +247,35 @@ func runStrip(args []string) error {
 	if err != nil {
 		return err
 	}
-	placements := layout.Default(cmds, state, styles)
+	var placements []layout.Placement
 	if layoutPath != "" {
 		placements, err = layout.Load(layoutPath, cmds, state, styles)
 		if err != nil {
 			return fmt.Errorf("strip: %w", err)
 		}
+	} else {
+		placements = layout.Default(cmds, state, styles)
+	}
+	if *compact {
+		placements = layout.Compacted(placements, state, styles)
 	}
 
-	inject := func(cmd catalog.Command, arg string, insertOnly bool) error {
+	inject := func(f app.Fire) error {
 		target, err := resolve()
 		if err != nil {
 			return err
 		}
-		text, opts := buildInjection(selection{cmd: cmd, arg: arg, insertOnly: insertOnly})
+		text, opts := buildInjection(selection{cmd: f.Cmd, arg: f.Arg, insertOnly: f.InsertOnly})
 		if err := client.Inject(target.ID, text, opts); err != nil {
 			return err
 		}
-		// Hand focus back: clicking the strip focused it, but after a
-		// fire the user's next keystroke belongs in the Claude pane
-		// (companion QA 2026-07-06). Best-effort — the injection landed.
-		_ = client.SelectPane(target.ID)
+		if f.FromMouse {
+			// A click-fire stole tmux focus from the Claude pane — hand
+			// it back (companion QA 2026-07-06). Keyboard fires keep the
+			// user where they deliberately are. Best-effort — the
+			// injection already landed.
+			_ = client.SelectPane(target.ID)
+		}
 		return nil
 	}
 	refresh := func() map[string]string {
@@ -288,7 +296,7 @@ func runStrip(args []string) error {
 	}
 	model := app.New(cmds, placements, styles).Persistent(hooks)
 	if *compact {
-		model = app.New(cmds, layout.Compacted(placements, state, styles), styles).Persistent(hooks).Compact()
+		model = model.Compact()
 	}
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		return fmt.Errorf("strip: %w", err)

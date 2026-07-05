@@ -75,10 +75,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	case tea.MouseClickMsg:
-		// y=0 is the prompt line; list rows follow. Coordinates arrive
-		// popup-local and border-adjusted (S1/P0), so no offset math.
 		if msg.Button == tea.MouseLeft {
-			if row := m.offset + msg.Y - 1; msg.Y >= 1 && row < len(m.visible) {
+			if row, ok := m.rowAt(msg.Y); ok {
 				c := m.commands[m.visible[row]]
 				m.selected = &c
 				return m, tea.Quit
@@ -88,7 +86,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Hover: the cursor follows the pointer over list rows (deck
 		// parity); off-list motion changes nothing, and an unchanged
 		// model renders an identical frame, so the motion flood is free.
-		if row := m.offset + msg.Y - 1; msg.Y >= 1 && row < len(m.visible) {
+		if row, ok := m.rowAt(msg.Y); ok {
 			m.cursor = row
 		}
 	case tea.MouseWheelMsg:
@@ -151,6 +149,19 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	m.clampCursor()
 	return m, nil
+}
+
+// rowAt maps a pointer Y to a visible-row index. y=0 is the prompt
+// line; list rows follow, popup-local and border-adjusted (S1/P0). The
+// bound is what View actually RENDERED (offset..last), never the whole
+// filtered list — the footer line otherwise selects an off-screen row
+// and Enter fires a command the user never saw (review 2026-07-06).
+func (m Model) rowAt(y int) (int, bool) {
+	row := m.offset + y - 1
+	if y < 1 || row >= min(m.offset+m.pageSize(), len(m.visible)) {
+		return 0, false
+	}
+	return row, true
 }
 
 // setQuery re-runs the filter and resets the viewport to the best match.

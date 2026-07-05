@@ -200,10 +200,13 @@ if [ -z "$ROW" ]; then bad "strip fire (COMPACT not found)"; else
   PREFIX=${LINE%%COMPACT*}
   click_at $(( ${#PREFIX} + 3 )) "$ROW"
   sleep 1.5
-  # origin_screen targets the session's ACTIVE pane — the strip now; the
-  # origin must be captured by id.
+  # Captures always target by id: a click-fire hands tmux focus BACK to
+  # the target pane (review 2026-07-06), so the active pane is the
+  # origin again.
   tmux -L "$SOCK" capture-pane -p -t "$ORIGIN" | rg -q 'no such file.*compact' \
     && ok "strip fire lands in origin" || bad "strip fire lands in origin"
+  [ "$(tmux -L "$SOCK" display-message -p '#{pane_id}')" = "$ORIGIN" ] \
+    && ok "click fire returns focus to origin" || bad "click fire returns focus to origin"
 fi
 host_screen | rg -q 'GEARSHIFTER' && ok "strip survives the fire" || bad "strip survives the fire"
 SCREEN=$(host_screen)
@@ -216,12 +219,45 @@ if [ -z "$ROW" ]; then bad "strip second fire (COPY not found)"; else
   tmux -L "$SOCK" capture-pane -p -t "$ORIGIN" | rg -q 'no such file.*copy' \
     && ok "strip fires again" || bad "strip fires again"
 fi
-send_host q # the click made the strip pane active; q quits the program
+# q targets the strip pane by id — focus-return means the active pane
+# is the origin, so untargeted keys would land there.
+tmux -L "$SOCK" send-keys -t "$STRIP" q
 sleep 1
 if tmux -L "$SOCK" list-panes -t rig -F '#{pane_id}' | rg -q "$STRIP"; then
   bad "q closes the strip"
 else
   ok "q closes the strip"
+fi
+
+echo "14. compact strip: chip flow fires, esc survives, q quits"
+tmux -L "$SOCK" send-keys -t "$ORIGIN" "clear" Enter
+sleep 0.5
+# 33 cols = the tcm sidebar default the flow is built for.
+CSTRIP=$(tmux -L "$SOCK" split-window -h -l 33 -P -F '#{pane_id}' -t "$ORIGIN" \
+  "$PWD/bin/gearshifter strip --compact --pane $ORIGIN --cwd $PWD")
+sleep 1.5
+SCREEN=$(host_screen)
+ROW=$(echo "$SCREEN" | grep -n 'COMPACT' | head -1 | cut -d: -f1 || true)
+if [ -z "$ROW" ]; then bad "compact chip visible (COMPACT not found)"; else
+  ok "compact chip visible"
+  LINE=$(echo "$SCREEN" | sed -n "${ROW}p")
+  PREFIX=${LINE%%COMPACT*}
+  click_at $(( ${#PREFIX} + 3 )) "$ROW"
+  sleep 1.5
+  tmux -L "$SOCK" capture-pane -p -t "$ORIGIN" | rg -q 'no such file.*compact' \
+    && ok "compact chip fires into origin" || bad "compact chip fires into origin"
+fi
+# esc must NOT quit a persistent strip (review 2026-07-06).
+tmux -L "$SOCK" send-keys -t "$CSTRIP" Escape
+sleep 0.5
+tmux -L "$SOCK" list-panes -t rig -F '#{pane_id}' | rg -q "$CSTRIP" \
+  && ok "esc survives the compact strip" || bad "esc survives the compact strip"
+tmux -L "$SOCK" send-keys -t "$CSTRIP" q
+sleep 1
+if tmux -L "$SOCK" list-panes -t rig -F '#{pane_id}' | rg -q "$CSTRIP"; then
+  bad "q closes the compact strip"
+else
+  ok "q closes the compact strip"
 fi
 
 echo

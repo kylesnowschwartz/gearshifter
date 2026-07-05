@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -286,12 +287,13 @@ type firedCall struct {
 	name       string
 	arg        string
 	insertOnly bool
+	fromMouse  bool
 }
 
 func persistentModel(fired *[]firedCall) Model {
 	return newTestModel().Persistent(PersistentHooks{
-		Inject: func(cmd catalog.Command, arg string, insertOnly bool) error {
-			*fired = append(*fired, firedCall{cmd.Name, arg, insertOnly})
+		Inject: func(f Fire) error {
+			*fired = append(*fired, firedCall{f.Cmd.Name, f.Arg, f.InsertOnly, f.FromMouse})
 			return nil
 		},
 	})
@@ -380,7 +382,7 @@ func TestPersistentArmedAbortStaysAlive(t *testing.T) {
 
 func TestPersistentInjectErrorLandsInFooter(t *testing.T) {
 	m := newTestModel().Persistent(PersistentHooks{
-		Inject: func(catalog.Command, string, bool) error {
+		Inject: func(Fire) error {
 			return fmt.Errorf("no Claude pane in this window")
 		},
 	})
@@ -388,6 +390,66 @@ func TestPersistentInjectErrorLandsInFooter(t *testing.T) {
 	m = completeFire(t, m)
 	if !strings.Contains(m.View().Content, "no Claude pane in this window") {
 		t.Error("an inject failure must fail with words in the footer")
+	}
+}
+
+// tileCenter finds order-index i's on-screen position via the same
+// layers the compositor renders — tests click what pixels show.
+func tileCenter(t *testing.T, m Model, i int) (x, y int) {
+	t.Helper()
+	layers, _ := m.gridLayers()
+	if m.compact {
+		layers, _ = m.flowLayers()
+	}
+	for _, l := range layers {
+		if l.GetID() == "tile:"+strconv.Itoa(i) {
+			return l.GetX() + 1, l.GetY()
+		}
+	}
+	t.Fatalf("tile %d not placed", i)
+	return 0, 0
+}
+
+// FromMouse rides the Fire: only click-fires ask the injector to hand
+// tmux focus back — a keyboard fire must not yank the user out of the
+// strip they deliberately focused (review 2026-07-06).
+func TestFireCarriesInputKind(t *testing.T) {
+	var fired []firedCall
+	m := persistentModel(&fired)
+	m = press(m, "l", "l", "enter") // keyboard fire
+	m = completeFire(t, m)
+	if len(fired) != 1 || fired[0].fromMouse {
+		t.Fatalf("keyboard fire = %+v, want fromMouse=false", fired)
+	}
+	// Click the same tile: focus 2 is COMPACT at its placement.
+	x, y := tileCenter(t, m, 2)
+	updated, _ := m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	m = completeFire(t, updated.(Model))
+	if len(fired) != 2 || !fired[1].fromMouse {
+		t.Fatalf("click fire = %+v, want fromMouse=true", fired)
+	}
+}
+
+// Error notices are sticky — the footer is the strip's only error
+// surface, and a silently expiring error reads as success (review
+// 2026-07-06). Confirmations keep the 5s TTL.
+func TestErrorNoticePersistsPastTTL(t *testing.T) {
+	var fired []firedCall
+	m := persistentModel(&fired)
+	updated, cmd := m.Update(noticeMsg{text: "no Claude pane in this window", isErr: true})
+	m = updated.(Model)
+	if cmd != nil {
+		t.Error("an error notice must not arm an expiry timer")
+	}
+	// Even a stray expiry from an older confirmation can't clear it.
+	updated, _ = m.Update(noticeExpireMsg{gen: m.noticeGen - 1})
+	m = updated.(Model)
+	if !strings.Contains(m.View().Content, "no Claude pane") {
+		t.Error("the error must persist until fresh input")
+	}
+	m = press(m, "l")
+	if strings.Contains(m.View().Content, "no Claude pane") {
+		t.Error("fresh input must clear the error")
 	}
 }
 
@@ -417,7 +479,7 @@ func TestPersistentPaletteSelectionDeliversAndReturnsToDeck(t *testing.T) {
 func TestPersistentRefreshRemarksGears(t *testing.T) {
 	seed := map[string]string{"model": "haiku", "effort": "low"} // = newTestModel's state
 	m := newTestModel().Persistent(PersistentHooks{
-		Inject:  func(catalog.Command, string, bool) error { return nil },
+		Inject:  func(Fire) error { return nil },
 		Refresh: func() map[string]string { return nil },
 		Seed:    seed,
 	})
@@ -473,8 +535,8 @@ func compactModel(fired *[]firedCall) Model {
 	cmds := testCommands()
 	placements := layout.Compacted(layout.Default(cmds, state, testStyles), state, testStyles)
 	m := New(cmds, placements, testStyles).Persistent(PersistentHooks{
-		Inject: func(cmd catalog.Command, arg string, insertOnly bool) error {
-			*fired = append(*fired, firedCall{cmd.Name, arg, insertOnly})
+		Inject: func(f Fire) error {
+			*fired = append(*fired, firedCall{f.Cmd.Name, f.Arg, f.InsertOnly, f.FromMouse})
 			return nil
 		},
 		Seed: map[string]string{"model": "haiku", "effort": "low"},
@@ -486,7 +548,7 @@ func compactModel(fired *[]firedCall) Model {
 func TestCompactFlowRendersWithin33Cols(t *testing.T) {
 	var fired []firedCall
 	content := compactModel(&fired).View().Content
-	for _, want := range []string{"M:haiku", "E:low", "▣ COMPACT", "⧉ COPY", "ALL COMMANDS"} {
+	for _, want := range []string{"M:haiku", "E:low", "⊟ COMPACT", "⧉ COPY", "ALL COMMANDS"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("compact view missing %q:\n%s", want, content)
 		}
@@ -560,12 +622,12 @@ func TestCompactEscCollapsesAndNeverQuits(t *testing.T) {
 func TestCompactNoticeAutoExpires(t *testing.T) {
 	var fired []firedCall
 	m := compactModel(&fired)
-	updated, cmd := m.Update(noticeMsg("→ /memory"))
+	updated, cmd := m.Update(noticeMsg{text: "→ /memory"})
 	m = updated.(Model)
 	if m.notice != "→ /memory" || cmd == nil {
 		t.Fatalf("notice = %q (cmd nil=%v), want the text and an expiry timer", m.notice, cmd == nil)
 	}
-	updated, _ = m.Update(noticeMsg("→ /compact")) // supersedes; gen bumps
+	updated, _ = m.Update(noticeMsg{text: "→ /compact"}) // supersedes; gen bumps
 	m = updated.(Model)
 	updated, _ = m.Update(noticeExpireMsg{gen: 1}) // the FIRST notice's timer
 	m = updated.(Model)
@@ -576,6 +638,50 @@ func TestCompactNoticeAutoExpires(t *testing.T) {
 	m = updated.(Model)
 	if m.notice != "" {
 		t.Errorf("the matching timer must clear the notice, got %q", m.notice)
+	}
+}
+
+// Hover-away retracts an open value row exactly like click-away —
+// otherwise the one-line modal strands keyboard-orphaned and a second
+// row can open beside it (review 2026-07-06).
+func TestCompactHoverAwayCollapsesGearChip(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+	m = press(m, "enter") // expand MODEL (focus starts there)
+	x, y := tileCenter(t, m, 1)
+	updated, _ := m.Update(tea.MouseMotionMsg{X: x, Y: y}) // hover EFFORT
+	m = updated.(Model)
+	if gc := m.order[0].Tile.(widget.GearChip); gc.Expanded {
+		t.Error("hovering another tile must collapse the open value row")
+	}
+	if m.focus != 1 {
+		t.Errorf("hover must still move focus, got %d", m.focus)
+	}
+}
+
+// The flow's canvas floor (review 2026-07-06): the launcher never
+// raises the width floor — it truncates in place — and the footer row
+// is INSIDE the minimum height, not one past it.
+func TestCompactMinCanvasExcludesLauncherAndKeepsFooter(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+	wMin, hMin := m.flowMinCanvas()
+	colW := m.flowColWidth()
+	if wMin != colW+2*marginX {
+		t.Errorf("min width %d, want column unit %d + margins (launcher must not raise it)", wMin, colW)
+	}
+	// At exactly the minimum height, the footer must be on screen.
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 33, Height: hMin})
+	m = updated.(Model)
+	lines := strings.Split(m.View().Content, "\n")
+	footer := -1
+	for i, l := range lines {
+		if strings.Contains(l, "q quit") {
+			footer = i
+		}
+	}
+	if footer < 0 || footer > hMin-1 {
+		t.Errorf("footer at row %d with min height %d — it would be clipped", footer, hMin)
 	}
 }
 

@@ -50,11 +50,16 @@ const stateRefreshInterval = 5 * time.Second
 // live value, layout.GearSettings shape) back into the update loop.
 type stateRefreshMsg map[string]string
 
-// noticeMsg carries an injection result (confirmation or error text)
-// back from the off-loop inject command into the footer.
-type noticeMsg string
+// noticeMsg carries an injection result back from the off-loop inject
+// command into the footer. Errors are sticky — the footer is the
+// strip's only error surface, so they persist until fresh input;
+// confirmations retire on the TTL (review 2026-07-06).
+type noticeMsg struct {
+	text  string
+	isErr bool
+}
 
-// noticeTTL retires a footer notice on its own — a strip nobody
+// noticeTTL retires a confirmation notice on its own — a strip nobody
 // touches shouldn't show "→ /cmd" forever (it read as ghost text,
 // companion QA 2026-07-06). Fresh input still clears it early.
 const noticeTTL = 5 * time.Second
@@ -63,13 +68,26 @@ const noticeTTL = 5 * time.Second
 // newer notice from being wiped by an older notice's timer.
 type noticeExpireMsg struct{ gen int }
 
+// Fire is one delivered selection crossing the app→injector seam — a
+// semantic bundle (CS-001), not a growing primitive trio.
+type Fire struct {
+	Cmd        catalog.Command
+	Arg        string
+	InsertOnly bool
+	// FromMouse: the fire came from a click, which also moved tmux
+	// focus onto the strip — the injector hands focus back. Keyboard
+	// fires keep focus where the user deliberately put it (review
+	// 2026-07-06: unconditional focus-return broke keyboard driving).
+	FromMouse bool
+}
+
 // PersistentHooks is everything strip mode wires into the app — one
-// semantic bundle so "is this a strip?" is one question (Inject != nil),
-// never two drifting nil checks.
+// semantic bundle so "is this a strip?" is one question (persistent()),
+// never scattered nil checks.
 type PersistentHooks struct {
 	// Inject delivers a fired selection to the target pane. Runs inside
 	// a tea command, off the update loop — it may block on tmux.
-	Inject func(cmd catalog.Command, arg string, insertOnly bool) error
+	Inject func(Fire) error
 	// Refresh polls live gear settings every stateRefreshInterval; also
 	// off-loop. Nil disables the tick.
 	Refresh func() map[string]string
@@ -98,9 +116,10 @@ type Model struct {
 	width   int
 	height  int
 
-	selected   *catalog.Command
-	arg        string
-	insertOnly bool
+	selected      *catalog.Command
+	arg           string
+	insertOnly    bool
+	fireFromMouse bool // the pending fire came from a click (see Fire.FromMouse)
 
 	// Persistent (strip) mode: hooks deliver each selection mid-loop
 	// instead of quitting and keep gear state live; notice is the
@@ -118,18 +137,18 @@ type Model struct {
 	compact bool
 }
 
-// Compact flips the model to the chip-flow rendering; the placements
-// must already be chip tiles (layout.Compacted).
-func (m Model) Compact() Model {
-	m.compact = true
-	return m
-}
-
 // New builds the app over a placed deck (layout.Default or, from P4, a
 // parsed layout.toml). Focus order = placement order; st must be the
 // same registry the placements' tiles were built with.
 func New(commands []catalog.Command, placements []layout.Placement, st *theme.Styles) Model {
 	return Model{commands: commands, order: placements, styles: st}
+}
+
+// Compact flips the model to the chip-flow rendering; the placements
+// must already be chip tiles (layout.Compacted).
+func (m Model) Compact() Model {
+	m.compact = true
+	return m
 }
 
 // Persistent flips the model into strip mode (STRIP-EMBED.md step 1):
@@ -142,6 +161,10 @@ func (m Model) Persistent(h PersistentHooks) Model {
 	m.lastSettings = h.Seed
 	return m
 }
+
+// persistent reports strip mode — the ONE question the PersistentHooks
+// contract promises, so mode checks can never drift apart.
+func (m Model) persistent() bool { return m.hooks.Inject != nil }
 
 func (m Model) Init() tea.Cmd {
 	return m.refreshTick()
@@ -157,8 +180,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateRefreshMsg:
 		return m.applyRefresh(msg), m.refreshTick()
 	case noticeMsg:
-		m.notice = string(msg)
-		m.noticeGen++
+		m.notice = msg.text
+		m.noticeGen++ // also invalidates any older confirmation's timer
+		if msg.isErr {
+			return m, nil // sticky: errors persist until fresh input
+		}
 		gen := m.noticeGen
 		return m, tea.Tick(noticeTTL, func(time.Time) tea.Msg { return noticeExpireMsg{gen} })
 	case noticeExpireMsg:
@@ -200,7 +226,7 @@ func (m Model) View() tea.View {
 // invisible tile.
 func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(pressFrameDoneMsg); ok {
-		if m.hooks.Inject == nil {
+		if !m.persistent() {
 			return m, tea.Quit
 		}
 		return m.deliver()
@@ -212,7 +238,7 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selected = nil
 				m.arg = ""
 				m.insertOnly = false
-				if m.hooks.Inject != nil {
+				if m.persistent() {
 					// Persistent mode: aborting a misclick must not cost
 					// the whole long-lived strip — disarm and live on.
 					m.armed = false
@@ -224,7 +250,7 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.String() == "esc" && m.collapseGearChips() {
 				return m, nil
 			}
-			if key.String() == "esc" && m.hooks.Inject != nil {
+			if key.String() == "esc" && m.persistent() {
 				// Persistent mode: esc is too easy to hit on the way to
 				// another pane, and losing the long-lived strip to a
 				// stray press is disproportionate (companion QA,
@@ -266,6 +292,7 @@ func (m Model) handleDeckClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	if msg.Button != tea.MouseLeft {
 		return m, nil
 	}
+	m.fireFromMouse = true
 	// Named-layer hit-testing (M3 P1 decision): the compositor knows
 	// every tile's bounds; a hit both focuses and fires — click = do.
 	hit := m.compositor().Hit(msg.X, msg.Y)
@@ -335,6 +362,10 @@ func (m Model) handleDeckMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
 	}
 	m.focusHidden = false
 	m.focus = i
+	// Hover-away retracts an open value row, same as click-away — else
+	// the "one-line modal" strands keyboard-orphaned and a second row
+	// can open beside it (review 2026-07-06).
+	m.collapseGearChipsExcept(i)
 	if g, isGear := m.order[i].Tile.(widget.Gear); isGear {
 		if v, ok := g.ValueAt(msg.Y - hit.Bounds().Min.Y); ok {
 			m.order[i].Tile = g.WithCursor(v)
@@ -361,6 +392,7 @@ func (m Model) handleDeckWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 // handleDeckKey owns everything below the quit keys (those live in
 // updateDeck so they survive a degraded canvas).
 func (m Model) handleDeckKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m.fireFromMouse = false
 	// An expanded gear chip captures navigation until it collapses —
 	// its value row is a one-line modal (Esc backs out, in updateDeck).
 	if gc, ok := m.order[m.focus].Tile.(widget.GearChip); ok && gc.Expanded {
@@ -467,7 +499,10 @@ func (m Model) routePalette(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if sel, ok := m.palette.Selection(); ok {
 		m.selected = &sel
 		m.insertOnly = m.palette.InsertOnly()
-		if m.hooks.Inject != nil {
+		// The palette can't say whether Enter or a click chose; keyboard
+		// is the safe default (no focus yank on a keyboard-driven pick).
+		m.fireFromMouse = false
+		if m.persistent() {
 			// Persistent mode: deliver and land back on the deck — the
 			// strip outlives every selection.
 			m.screen = screenDeck
@@ -489,18 +524,18 @@ func (m Model) deliver() (tea.Model, tea.Cmd) {
 	if m.selected == nil {
 		return m, nil
 	}
-	sel, arg, insertOnly := *m.selected, m.arg, m.insertOnly
-	m.selected, m.arg, m.insertOnly = nil, "", false
+	fire := Fire{Cmd: *m.selected, Arg: m.arg, InsertOnly: m.insertOnly, FromMouse: m.fireFromMouse}
+	m.selected, m.arg, m.insertOnly, m.fireFromMouse = nil, "", false, false
 	inject := m.hooks.Inject
 	return m, func() tea.Msg {
-		if err := inject(sel, arg, insertOnly); err != nil {
-			return noticeMsg(err.Error())
+		if err := inject(fire); err != nil {
+			return noticeMsg{text: err.Error(), isErr: true}
 		}
-		notice := "→ /" + sel.Name
-		if arg != "" {
-			notice += " " + arg
+		notice := "→ /" + fire.Cmd.Name
+		if fire.Arg != "" {
+			notice += " " + fire.Arg
 		}
-		return noticeMsg(notice)
+		return noticeMsg{text: notice}
 	}
 }
 
@@ -525,15 +560,12 @@ func (m Model) refreshTick() tea.Cmd {
 // behavior.
 func (m Model) applyRefresh(settings map[string]string) Model {
 	for i, p := range m.order {
-		switch g := p.Tile.(type) {
-		case widget.Gear:
-			if v, ok := settings[g.Cmd.Name]; ok && v != m.lastSettings[g.Cmd.Name] {
-				m.order[i].Tile = g.WithCurrent(v)
-			}
-		case widget.GearChip:
-			if v, ok := settings[g.Cmd.Name]; ok && v != m.lastSettings[g.Cmd.Name] {
-				m.order[i].Tile = g.WithCurrent(v)
-			}
+		g, ok := p.Tile.(widget.Remarkable)
+		if !ok {
+			continue
+		}
+		if v, ok := settings[g.SettingName()]; ok && v != m.lastSettings[g.SettingName()] {
+			m.order[i].Tile = g.Remark(v)
 		}
 	}
 	m.lastSettings = settings
@@ -551,7 +583,7 @@ var marginX = deck.Scale[0]
 func (m Model) compositor() *lipgloss.Compositor {
 	layers, tileRows := m.gridLayers()
 	hint := "h/l tiles · j/k in gear · Enter fire · / all commands · Esc close"
-	if m.hooks.Inject != nil {
+	if m.persistent() {
 		// Persistent mode never quits on esc — the hint must not claim
 		// otherwise.
 		hint = "h/l tiles · j/k in gear · Enter fire · / all commands · q quit"
@@ -582,7 +614,7 @@ func (m Model) compositor() *lipgloss.Compositor {
 	// The footer (hint or a long tmux error) must never exceed the
 	// canvas — over-wide lines clip cell-by-cell downstream, losing the
 	// tail silently; truncating here keeps the cut honest.
-	base = append(base, margin+m.styles.Chrome.Footer.Render(truncateCells(hint, max(0, m.width-2*marginX))))
+	base = append(base, margin+m.styles.Chrome.Footer.Render(widget.Truncate(hint, max(0, m.width-2*marginX))))
 	baseLayer := lipgloss.NewLayer(strings.Join(base, "\n")).X(0).Y(0).Z(0)
 
 	return lipgloss.NewCompositor(append([]*lipgloss.Layer{baseLayer}, layers...)...)
@@ -595,7 +627,7 @@ func (m Model) gridLayers() ([]*lipgloss.Layer, int) {
 	layers := make([]*lipgloss.Layer, 0, len(m.order))
 	for i, p := range m.order {
 		x, w := grid.Cell(p.Col, p.Tile.Span())
-		rs := widget.RenderState{Focused: i == m.focus && !m.focusHidden, Armed: m.armed && i == m.focus}
+		rs := m.renderState(i)
 		layers = append(layers, lipgloss.NewLayer(p.Tile.View(rs, w)).
 			ID("tile:"+strconv.Itoa(i)).X(marginX+x).Y(p.Y).Z(1))
 		if bottom := p.Y + p.Tile.Rows(); bottom > tileRows {
@@ -610,6 +642,17 @@ func (m Model) gridLayers() ([]*lipgloss.Layer, int) {
 // spare on branding).
 const flowBodyY = 0
 
+// flowGutter is the gap between chip columns — the smallest step of
+// the Fibonacci scale, like every other gap (CS-004).
+var flowGutter = deck.Scale[0]
+
+// renderState derives a tile's RenderState — the ONE model→render
+// mapping every layer builder shares, so a new render fact can never
+// wire into one mode only.
+func (m Model) renderState(i int) widget.RenderState {
+	return widget.RenderState{Focused: i == m.focus && !m.focusHidden, Armed: m.armed && i == m.focus}
+}
+
 // flowLayers packs chips onto a column grid, wrapping at the canvas
 // edge (STRIP-EMBED step 2). Every chip is granted the width of the
 // widest one and positions snap to column starts, so labels line up
@@ -621,7 +664,7 @@ const flowBodyY = 0
 func (m Model) flowLayers() ([]*lipgloss.Layer, int) {
 	maxX := m.width - marginX
 	colW := m.flowColWidth()
-	step := colW + 1
+	step := colW + flowGutter
 	x, y := marginX, flowBodyY
 	layers := make([]*lipgloss.Layer, 0, len(m.order))
 	for i, p := range m.order {
@@ -633,7 +676,7 @@ func (m Model) flowLayers() ([]*lipgloss.Layer, int) {
 		if w > maxX-x {
 			w = maxX - x
 		}
-		rs := widget.RenderState{Focused: i == m.focus && !m.focusHidden, Armed: m.armed && i == m.focus}
+		rs := m.renderState(i)
 		layers = append(layers, lipgloss.NewLayer(p.Tile.View(rs, w)).
 			ID("tile:"+strconv.Itoa(i)).X(x).Y(y).Z(1))
 		if ownRow {
@@ -677,25 +720,6 @@ func flowWidth(t widget.Tile, maxW int) int {
 	return min(w, maxW)
 }
 
-// truncateCells cuts plain text to at most w display cells (style is
-// applied after, one style per row — M2 gotcha).
-func truncateCells(s string, w int) string {
-	if lipgloss.Width(s) <= w {
-		return s
-	}
-	var b strings.Builder
-	x := 0
-	for _, r := range s {
-		rw := lipgloss.Width(string(r))
-		if x+rw > w {
-			break
-		}
-		b.WriteRune(r)
-		x += rw
-	}
-	return b.String()
-}
-
 // hitTile decodes a compositor hit back to an order index.
 func hitTile(hit lipgloss.LayerHit) (int, bool) {
 	id, ok := strings.CutPrefix(hit.ID(), "tile:")
@@ -724,24 +748,16 @@ func (m Model) minCanvas() (w, h int) {
 	return 2*marginX + deck.MinWidth(), h
 }
 
-// flowMinCanvas: the widest COLLAPSED chip must fit one row (an
-// expanded gear clamps instead of raising the floor), and every flowed
-// row plus the footer must be on screen at the current width.
+// flowMinCanvas: the widest collapsed chip (flowColWidth — wider
+// tiles like the launcher or an expanded gear truncate in place
+// instead of raising the floor), and every flowed row plus the spacer
+// and footer must be on screen at the current width (review
+// 2026-07-06: the old floor demanded the launcher's full width and
+// still clipped the footer — the strip's only feedback line — by one
+// row).
 func (m Model) flowMinCanvas() (w, h int) {
-	for _, p := range m.order {
-		var nw int
-		switch t := p.Tile.(type) {
-		case widget.GearChip:
-			nw = t.Collapse().NaturalWidth()
-		case widget.FlowTile:
-			nw = t.NaturalWidth()
-		}
-		if nw > w {
-			w = nw
-		}
-	}
 	_, bottom := m.flowLayers()
-	return w + 2*marginX, bottom + 1
+	return m.flowColWidth() + 2*marginX, bottom + 2
 }
 
 func (m Model) canvasTooSmall() bool {

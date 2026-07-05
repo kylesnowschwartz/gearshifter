@@ -121,30 +121,13 @@ func (g GearChip) WithCursor(i int) GearChip {
 	return g
 }
 
-// WithCurrent marks the session's live value — same matching rule as
-// Gear.WithCurrent (exact first, then contains; see that comment).
+// WithCurrent marks the session's live value (matchValue is the one
+// matching rule both gear forms share); the cursor follows only while
+// collapsed — an expanded row's cursor belongs to the user.
 func (g GearChip) WithCurrent(setting string) GearChip {
-	g.current = -1
-	setting = strings.ToLower(setting)
-	if setting == "" {
-		return g
-	}
-	match := -1
-	for i, v := range g.Values {
-		v = strings.ToLower(v)
-		if setting == v {
-			match = i
-			break
-		}
-		if match == -1 && strings.Contains(setting, v) {
-			match = i
-		}
-	}
-	if match >= 0 {
-		g.current = match
-		if !g.Expanded {
-			g.cursor = match
-		}
+	g.current = matchValue(g.Values, setting)
+	if g.current >= 0 && !g.Expanded {
+		g.cursor = g.current
 	}
 	return g
 }
@@ -156,11 +139,7 @@ func (g GearChip) badge() string {
 	if g.current >= 0 {
 		val = g.Values[g.current]
 	}
-	initial := " "
-	if g.Label != "" {
-		initial = string([]rune(g.Label)[0])
-	}
-	return initial + ":" + val
+	return g.badgeInitial() + ":" + val
 }
 
 // segment is one value's cell range inside the expanded row — the ONE
@@ -210,6 +189,21 @@ func (g GearChip) NaturalWidth() int {
 	return segs[len(segs)-1].end + chipPad
 }
 
+// SettingName / Remark implement Remarkable for the refresh loop.
+func (g GearChip) SettingName() string      { return g.Cmd.Name }
+func (g GearChip) Remark(value string) Tile { return g.WithCurrent(value) }
+
+// fittingSegments counts the leading segments whose cells fit within
+// limit — the expanded row's truncation boundary (whole values only).
+func fittingSegments(segs []segment, limit int) int {
+	for i, s := range segs {
+		if s.end > limit {
+			return i
+		}
+	}
+	return len(segs)
+}
+
 // ValueAtX maps a cell offset inside the expanded tile to a value
 // index, for mouse hits. False when collapsed or in the gaps.
 func (g GearChip) ValueAtX(xInTile int) (int, bool) {
@@ -240,11 +234,21 @@ func (g GearChip) View(rs RenderState, width int) string {
 		return st.Value.Render(line)
 	}
 	// Expanded: style each value cell on its own (sequential segments,
-	// never nested — M2 gotcha), separators unstyled.
+	// never nested — M2 gotcha), separators unstyled. Values that don't
+	// fit the granted width are cut at the segment boundary and marked
+	// with an ellipsis — never mid-cell, never mid-ANSI (review
+	// 2026-07-06: the row used to overflow its layer; the renderer clips
+	// silently, so clipped values looked absent while j/k could still
+	// fire them with no hint they existed).
 	prefix, segs := g.segments()
 	var b strings.Builder
 	b.WriteString(st.Value.Render(prefix))
-	for i, s := range segs {
+	shown := fittingSegments(segs, width)
+	if shown < len(segs) {
+		// Something is cut: re-fit with one cell reserved for the mark.
+		shown = fittingSegments(segs, width-1)
+	}
+	for i, s := range segs[:shown] {
 		if i > 0 {
 			b.WriteString(" ")
 		}
@@ -263,6 +267,9 @@ func (g GearChip) View(rs RenderState, width int) string {
 		default:
 			b.WriteString(st.Value.Render(cell))
 		}
+	}
+	if shown < len(segs) {
+		b.WriteString(st.Value.Render("…"))
 	}
 	line := b.String()
 	if gap := width - lipgloss.Width(line); gap > 0 {
@@ -305,7 +312,7 @@ func (l LauncherChip) View(rs RenderState, width int) string {
 // pad centers nothing: chips are left-aligned inside one pad cell each
 // side, truncated when the flow granted less than natural width.
 func pad(s string, width int) string {
-	s = truncate(s, max(0, width-2*chipPad))
+	s = Truncate(s, max(0, width-2*chipPad))
 	line := strings.Repeat(" ", chipPad) + s
 	if gap := width - lipgloss.Width(line); gap > 0 {
 		line += strings.Repeat(" ", gap)

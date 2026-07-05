@@ -52,11 +52,11 @@ func TestWithCurrentPrefersExactMatch(t *testing.T) {
 func TestTruncateIsCellAware(t *testing.T) {
 	// Wide runes: rune-slicing would keep 4 runes = 8 cells; the tile
 	// budget is in cells, and overflow desyncs compositor hit-testing.
-	got := truncate("ワイドラベル", 5)
+	got := Truncate("ワイドラベル", 5)
 	if w := 4; len([]rune(got)) > 2 || got == "" {
-		t.Errorf("truncate(wide, 5) = %q (want ≤ %d cells, non-empty)", got, w)
+		t.Errorf("Truncate(wide, 5) = %q (want ≤ %d cells, non-empty)", got, w)
 	}
-	if truncate("plain", 10) != "plain" {
+	if Truncate("plain", 10) != "plain" {
 		t.Error("strings within budget pass through untouched")
 	}
 }
