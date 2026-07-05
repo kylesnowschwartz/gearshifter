@@ -215,10 +215,9 @@ func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, styles *theme
 		sel, ok := model.Selection()
 		return selection{cmd: sel, insertOnly: model.InsertOnly()}, ok, nil
 	default: // deck, inbuilt or from a layout.toml — both consume placements
-		home, _ := os.UserHomeDir()
 		// Session-specific model when the pane's Claude session is
 		// resolvable; global settings otherwise (V7/P3.5, M3-DECK.md).
-		var provider agent.Provider = claude.New(home)
+		var provider agent.Provider = claude.New()
 		panePID, _ := client.PanePID(pane)
 		paneCwd, _ := client.PaneCwd(pane)
 		state := provider.State(panePID, paneCwd)
