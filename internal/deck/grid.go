@@ -22,7 +22,6 @@ const (
 
 // Grid maps column spans to cell geometry for a given canvas width.
 type Grid struct {
-	width  int
 	gutter int
 	cols   []int // per-column cell widths
 }
@@ -30,7 +29,7 @@ type Grid struct {
 // New builds the 13-column grid for a canvas width. The gutter is the
 // smallest step of the scale — popup canvases are narrow.
 func New(width int) Grid {
-	g := Grid{width: width, gutter: Scale[0]}
+	g := Grid{gutter: Scale[0]}
 	usable := width - g.gutter*(Columns-1)
 	if usable < Columns {
 		usable = Columns // degenerate floor: 1 cell per column
@@ -63,9 +62,6 @@ func (g Grid) Cell(col, span int) (x, w int) {
 	}
 	return x, w
 }
-
-// Width returns the full canvas width the grid was built for.
-func (g Grid) Width() int { return g.width }
 
 // MinWidth is the narrowest canvas the grid renders legibly on: two cells
 // per column (a border needs a neighbor) plus the gutters between them.

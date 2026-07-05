@@ -46,12 +46,17 @@ type Tile interface {
 var (
 	faint      = lipgloss.NewStyle().Faint(true)
 	reversed   = lipgloss.NewStyle().Reverse(true)
+	bold       = lipgloss.NewStyle().Bold(true)
 	normalTile = lipgloss.NewStyle().Border(lipgloss.NormalBorder())
 	focusTile  = lipgloss.NewStyle().Border(lipgloss.DoubleBorder())
 )
 
-// borderRows is the vertical chrome every tile pays: top + bottom border.
-const borderRows = 2
+// borderRows/borderCols are the chrome every tile pays: top + bottom
+// border rows, left + right border columns.
+const (
+	borderRows = 2
+	borderCols = 2
+)
 
 // box renders bordered tile chrome around pre-styled content rows. Mock D
 // chrome: single border normally, double-border focus ring. lipgloss v2
@@ -65,14 +70,32 @@ func box(focused bool, width int, rows ...string) string {
 	return style.Width(width).Render(strings.Join(rows, "\n"))
 }
 
+// truncate cuts s to at most width display cells. Rune-count slicing
+// would overflow the tile on wide runes (CJK/emoji labels from a user
+// layout.toml) and desync the compositor's hit-testing.
+func truncate(s string, width int) string {
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	var b strings.Builder
+	w := 0
+	for _, r := range s {
+		rw := lipgloss.Width(string(r))
+		if w+rw > width {
+			break
+		}
+		b.WriteRune(r)
+		w += rw
+	}
+	return b.String()
+}
+
 // center pads s to exactly width cells, centered. Rows are styled AFTER
 // padding, one style per full row (nested styles reset ANSI mid-row — M2
 // gotcha). Cell math via lipgloss.Width — labels contain multibyte runes.
 func center(s string, width int) string {
+	s = truncate(s, max(0, width))
 	w := lipgloss.Width(s)
-	if w > width {
-		return string([]rune(s)[:max(0, width)])
-	}
 	left := (width - w) / 2
 	return strings.Repeat(" ", left) + s + strings.Repeat(" ", width-w-left)
 }
@@ -96,7 +119,7 @@ func (b Button) Span() int         { return b.span }
 func (b Button) Rows() int         { return borderRows + buttonContentRows }
 
 func (b Button) View(focused bool, width int) string {
-	inner := width - 2
+	inner := width - borderCols
 	label := center(b.Label, inner)
 	if focused {
 		label = reversed.Render(label)
@@ -152,17 +175,29 @@ func (g Gear) WithCursor(i int) Gear {
 
 // WithCurrent marks the session's live value (▐ + bold) and starts the
 // cursor there. Settings values come in several shapes — "opus" but also
-// "claude-fable-5[1m]" — so a value matches when it appears inside the
-// setting (case-insensitive). No match = stateless render, no mark.
+// "claude-fable-5[1m]" — so an exact match wins first, then a value that
+// appears inside the setting (case-insensitive; exact-first keeps "opus"
+// from being claimed by a value like "o"). No match = stateless render.
 func (g Gear) WithCurrent(setting string) Gear {
 	g.current = -1
 	setting = strings.ToLower(setting)
+	if setting == "" {
+		return g
+	}
+	match := -1
 	for i, v := range g.Values {
-		if setting == v || (setting != "" && strings.Contains(setting, strings.ToLower(v))) {
-			g.current = i
-			g.cursor = i
+		v = strings.ToLower(v)
+		if setting == v {
+			match = i
 			break
 		}
+		if match == -1 && strings.Contains(setting, v) {
+			match = i
+		}
+	}
+	if match >= 0 {
+		g.current = match
+		g.cursor = match
 	}
 	return g
 }
@@ -182,11 +217,8 @@ func (g Gear) View(focused bool, width int) string {
 	if focused {
 		h, v, tl, tr, bl, br = "═", "║", "╔", "╗", "╚", "╝"
 	}
-	inner := width - 2
-	title := " " + g.Label + " "
-	if lipgloss.Width(title) > inner {
-		title = string([]rune(title)[:max(0, inner)])
-	}
+	inner := width - borderCols
+	title := truncate(" "+g.Label+" ", max(0, inner))
 	rows := []string{tl + title + strings.Repeat(h, max(0, inner-lipgloss.Width(title))) + tr}
 	for i, val := range g.Values {
 		mark := "  "
@@ -199,7 +231,7 @@ func (g Gear) View(focused bool, width int) string {
 		case focused && i == g.cursor:
 			line = reversed.Render(line)
 		case i == g.current:
-			line = lipgloss.NewStyle().Bold(true).Render(line)
+			line = bold.Render(line)
 		}
 		rows = append(rows, v+line+v)
 	}
@@ -226,7 +258,7 @@ func (l Launcher) Span() int         { return l.span }
 func (l Launcher) Rows() int         { return borderRows + launcherContentRows }
 
 func (l Launcher) View(focused bool, width int) string {
-	inner := width - 2
+	inner := width - borderCols
 	label := " ALL COMMANDS…"
 	if focused {
 		label = reversed.Render(label)

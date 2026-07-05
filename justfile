@@ -23,7 +23,7 @@ ls cwd=invocation_directory(): build
 # -h 75%: the stacked gear rail needs ~20 inner rows
 # Open the gearshifter deck in a tmux popup; firing a tile injects its command into the pane the popup was launched from
 popup layout="deck": build
-    tmux display-popup -E -w 70% -h 75% "{{justfile_directory()}}/bin/gearshifter pick --layout \"$(realpath '{{layout}}' 2>/dev/null || echo '{{layout}}')\" --pane '$TMUX_PANE' --cwd '{{invocation_directory()}}'"
+    tmux display-popup -E -w 70% -h 75% "{{justfile_directory()}}/bin/gearshifter pick --layout \"$(case '{{layout}}' in deck|telescope) echo '{{layout}}';; *) realpath '{{layout}}';; esac)\" --pane '$TMUX_PANE' --cwd '{{invocation_directory()}}'"
 
 # Open the M2 telescope palette (fullscreen searchable list) in a tmux popup — the pre-deck UI, still the binary default until P5
 popup-telescope: build

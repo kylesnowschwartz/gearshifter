@@ -41,6 +41,12 @@ func TestFindSession(t *testing.T) {
 	if _, ok := findSession(entries, nil, "/nowhere"); ok {
 		t.Error("no match must report not-found")
 	}
+	// A registry entry with no startedAt is still a live cwd match
+	// (review finding: "" > "" is false, so it was never selected).
+	bare := []sessionEntry{{PID: alive, SessionID: "no-started-at", Cwd: "/c"}}
+	if e, ok := findSession(bare, nil, "/c"); !ok || e.SessionID != "no-started-at" {
+		t.Errorf("empty startedAt: got %v %v, want no-started-at", e.SessionID, ok)
+	}
 }
 
 func TestEncodeProjectPath(t *testing.T) {

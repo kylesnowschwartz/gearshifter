@@ -81,8 +81,19 @@ func (m Model) View() tea.View {
 }
 
 // updateDeck dispatches deck input by kind; each handler owns one input
-// device. Keyboard policy lives here in app — it owns focus.
+// device. Keyboard policy lives here in app — it owns focus. Quit keys
+// always work; everything else is gated once, here, so a degraded canvas
+// (or an empty deck) can never focus, fire, or hit an invisible tile.
 func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyPressMsg); ok {
+		switch key.String() {
+		case "ctrl+c", "esc", "q":
+			return m, tea.Quit
+		}
+	}
+	if len(m.order) == 0 || m.canvasTooSmall() {
+		return m, nil
+	}
 	switch msg := msg.(type) {
 	case tea.MouseClickMsg:
 		return m.handleDeckClick(msg)
@@ -95,8 +106,8 @@ func (m Model) updateDeck(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDeckClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
-	if msg.Button != tea.MouseLeft || m.canvasTooSmall() {
-		return m, nil // degraded render draws no tiles, so none can be hit
+	if msg.Button != tea.MouseLeft {
+		return m, nil
 	}
 	// Named-layer hit-testing (M3 P1 decision): the compositor knows
 	// every tile's bounds; a hit both focuses and fires — click = do.
@@ -122,28 +133,23 @@ func (m Model) handleDeckClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleDeckWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	switch msg.Button {
 	case tea.MouseWheelDown:
-		m.focus = (m.focus + 1) % len(m.order)
+		m.focus = wrapIndex(m.focus, +1, len(m.order))
 	case tea.MouseWheelUp:
-		m.focus = (m.focus - 1 + len(m.order)) % len(m.order)
+		m.focus = wrapIndex(m.focus, -1, len(m.order))
 	}
 	return m, nil
 }
 
+// handleDeckKey owns everything below the quit keys (those live in
+// updateDeck so they survive a degraded canvas).
 func (m Model) handleDeckKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch key.String() {
-	case "ctrl+c", "esc", "q":
-		return m, tea.Quit
-	}
-	if m.canvasTooSmall() {
-		return m, nil // never fire an invisible tile; only quit keys work degraded
-	}
 	switch key.String() {
 	case "enter":
 		return m.activate(m.order[m.focus].Tile.Activate())
 	case "left", "h", "shift+tab":
-		m.focus = (m.focus - 1 + len(m.order)) % len(m.order)
+		m.focus = wrapIndex(m.focus, -1, len(m.order))
 	case "right", "l", "tab":
-		m.focus = (m.focus + 1) % len(m.order)
+		m.focus = wrapIndex(m.focus, +1, len(m.order))
 	case "down", "j":
 		// j/k walk the gated column inside a focused gear; between tiles
 		// otherwise (h/l always move between tiles — mock D interactions).
@@ -151,17 +157,22 @@ func (m Model) handleDeckKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.order[m.focus].Tile = g.CursorNext()
 			return m, nil
 		}
-		m.focus = (m.focus + 1) % len(m.order)
+		m.focus = wrapIndex(m.focus, +1, len(m.order))
 	case "up", "k":
 		if g, ok := m.order[m.focus].Tile.(widget.Gear); ok {
 			m.order[m.focus].Tile = g.CursorPrev()
 			return m, nil
 		}
-		m.focus = (m.focus - 1 + len(m.order)) % len(m.order)
+		m.focus = wrapIndex(m.focus, -1, len(m.order))
 	case "/":
 		return m.openPalette()
 	}
 	return m, nil
+}
+
+// wrapIndex moves i by delta with wrap-around over n items.
+func wrapIndex(i, delta, n int) int {
+	return ((i+delta)%n + n) % n
 }
 
 // activate translates a tile intent. TileActivated records the command for

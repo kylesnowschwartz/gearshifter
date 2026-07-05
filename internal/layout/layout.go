@@ -64,10 +64,10 @@ func flow(entries []entry) []Placement {
 func Default(commands []catalog.Command, state agent.State) []Placement {
 	model := widget.NewGear(findCommand(commands, "model"), "MODEL",
 		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan).
-		WithCurrent(state.Model)
+		WithCurrent(gearSetting("model", state))
 	effort := widget.NewGear(findCommand(commands, "effort"), "EFFORT",
 		[]string{"low", "medium", "high", "max"}, deck.RailSpan).
-		WithCurrent(state.Effort)
+		WithCurrent(gearSetting("effort", state))
 	entries := []entry{{model, 0}, {effort, 0}}
 
 	buttonSpan := deck.MainSpan / buttonsPerRow

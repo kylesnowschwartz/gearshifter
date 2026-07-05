@@ -207,6 +207,23 @@ func TestTinyCanvasDegradesToMessageAndInertInput(t *testing.T) {
 	if _, ok := m.Selection(); ok || m.screen != screenDeck {
 		t.Error("enter on a degraded canvas must not fire an invisible tile")
 	}
+	updated, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m = updated.(Model)
+	if m.focus != 0 {
+		t.Error("wheel on a degraded canvas must not move focus")
+	}
+}
+
+func TestEmptyDeckNeverPanics(t *testing.T) {
+	m := New(nil, nil) // no placements: inert but alive, quit keys work
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 20})
+	m = updated.(Model)
+	m = press(m, "l", "j", "enter")
+	updated, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	m = updated.(Model)
+	if _, ok := m.Selection(); ok {
+		t.Error("empty deck must select nothing")
+	}
 }
 
 func TestDeckViewRendersTiles(t *testing.T) {

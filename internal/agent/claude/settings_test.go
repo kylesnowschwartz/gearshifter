@@ -6,20 +6,12 @@ import (
 	"testing"
 
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
+	"github.com/kylesnowschwartz/gearshifter/internal/testutil"
 )
 
-// TestMain sandboxes HOME — same invariant as the catalog package: tests
-// must never reach the user's real ~/.claude directory, even through an
-// accidental env-based lookup. Fixtures use t.TempDir().
+// TestMain sandboxes HOME (shared invariant; fixtures use t.TempDir()).
 func TestMain(m *testing.M) {
-	sandbox, err := os.MkdirTemp("", "gearshifter-test-home-")
-	if err != nil {
-		panic(err)
-	}
-	os.Setenv("HOME", sandbox)
-	code := m.Run()
-	os.RemoveAll(sandbox)
-	os.Exit(code)
+	os.Exit(testutil.SandboxHome(m))
 }
 
 func writeSettings(t *testing.T, content string) string {

@@ -5,21 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kylesnowschwartz/gearshifter/internal/testutil"
 )
 
-// TestMain sandboxes HOME so no test — present or future — can reach the
-// user's real ~/.claude directory, even through an accidental env-based
-// lookup. Fixtures themselves use t.TempDir(), which tears down
-// automatically. (M1 review directive.)
+// TestMain sandboxes HOME (shared invariant, M1 review directive;
+// fixtures use t.TempDir(), which tears down automatically).
 func TestMain(m *testing.M) {
-	sandbox, err := os.MkdirTemp("", "gearshifter-test-home-")
-	if err != nil {
-		panic(err)
-	}
-	os.Setenv("HOME", sandbox)
-	code := m.Run()
-	os.RemoveAll(sandbox)
-	os.Exit(code)
+	os.Exit(testutil.SandboxHome(m))
 }
 
 func writeFile(t *testing.T, path, content string) {

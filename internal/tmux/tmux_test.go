@@ -5,19 +5,14 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/kylesnowschwartz/gearshifter/internal/testutil"
 )
 
-// TestMain sandboxes HOME — same invariant as the catalog package: tests
-// must never be able to touch the user's real ~/.claude.
+// TestMain sandboxes HOME (shared invariant; tests must never be able to
+// touch the user's real ~/.claude).
 func TestMain(m *testing.M) {
-	sandbox, err := os.MkdirTemp("", "gearshifter-test-home-")
-	if err != nil {
-		panic(err)
-	}
-	os.Setenv("HOME", sandbox)
-	code := m.Run()
-	os.RemoveAll(sandbox)
-	os.Exit(code)
+	os.Exit(testutil.SandboxHome(m))
 }
 
 type fakeRunner struct {

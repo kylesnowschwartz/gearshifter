@@ -178,8 +178,10 @@ func spanOf(t tomlTile, defaultSpan int) (int, error) {
 }
 
 // gearSetting maps a gear's command to the session state that marks its
-// current value. Gears for other enum commands render stateless — honest
-// until an agent.Provider learns their state.
+// current value — the ONE binding site between command names and
+// agent.State fields (Default and Load both route through it). Gears for
+// other enum commands render stateless — honest until an agent.Provider
+// learns their state.
 func gearSetting(name string, state agent.State) string {
 	switch name {
 	case "model":
