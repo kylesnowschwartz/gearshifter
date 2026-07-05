@@ -1,11 +1,14 @@
 # Kyle's daily deck (data-driven, DECK-CONTENT.md 2026-07-05): the
-# default's gears + a STYLE gear (personal output styles, live-marked
-# from settings.json), the generic button 6-pack minus CONFIG/RESUME,
-# plus GOAL (insert — always takes a condition), RADIO, and the
-# plugin-dev loop. Pointed at by @gearshifter-layout in
+# default's gears, the generic button 6-pack minus CONFIG/RESUME, plus
+# GOAL (insert — always takes a condition), RADIO, and the plugin-dev
+# loop. Pointed at by @gearshifter-layout in
 # dotfiles/tmux/.tmux.conf.local.
 #
-# Needs ~28 popup rows (three-gear rail); bump @gearshifter-height if
+# STYLE gear removed 2026-07-05: Claude Code dropped /output-style, and
+# /config outputStyle= rejects custom styles non-interactively — no
+# injectable path exists (DECK-CONTENT.md postscript).
+#
+# Needs ~22 popup rows (two-gear rail); bump @gearshifter-height if
 # the deck reports the canvas too small.
 
 [[tile]]
@@ -19,14 +22,6 @@ span    = 5
 type    = "gear"
 command = "effort"
 values  = ["low", "medium", "high", "max"]
-col     = 0
-span    = 5
-
-[[tile]]
-type    = "gear"
-command = "output-style"
-label   = "STYLE"
-values  = ["butterfield", "linus-torvalds", "mayo-clinic", "readable-markdown"]
 col     = 0
 span    = 5
 
