@@ -25,8 +25,11 @@ import (
 // sessionState returns the gear state for the Claude session running in
 // the target pane: session-specific model when resolvable, global
 // settings otherwise; effort is always global (not persisted per session).
-// The fresher file wins the model — settings.json updates the instant
-// /model runs, transcripts only on the next assistant reply. That
+// The fresher FACT wins the model: the transcript's model is only as
+// fresh as its last assistant entry's timestamp — never the file mtime,
+// which moves on every appended entry (user prompts, local commands),
+// so an active session's /model change was losing to a merely-touched
+// transcript until the next reply (found live 2026-07-05). That
 // arbitration rule is gearshifter policy, not library behavior.
 func sessionState(root claudedir.Root, panePID int, paneCwd string) agent.State {
 	state := readSettings(root)
@@ -35,11 +38,11 @@ func sessionState(root claudedir.Root, panePID int, paneCwd string) agent.State 
 		return state
 	}
 	transcriptPath := root.SessionTranscriptPath(entry.Cwd, entry.SessionID)
-	model, transcriptTime := transcript.LastAssistantModel(transcriptPath)
+	model, modelTime := transcript.LastAssistantModelAt(transcriptPath)
 	if model == "" {
 		return state
 	}
-	if transcriptTime.After(mtime(root.SettingsPath())) || state.Model == "" {
+	if modelTime.After(mtime(root.SettingsPath())) || state.Model == "" {
 		state.Model = model
 	}
 	return state

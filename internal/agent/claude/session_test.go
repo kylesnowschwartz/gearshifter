@@ -103,6 +103,30 @@ func TestStateSurvivesTranscriptDrift(t *testing.T) {
 	}
 }
 
+// Kyle's live repro (2026-07-05, strip QA): /model opus writes
+// settings.json AND appends a user entry to the transcript in the same
+// breath, so the transcript FILE is newer than settings while its last
+// assistant entry (the model fact) is old. The fact's entry timestamp
+// must arbitrate, not the file mtime — settings must win here.
+func TestModelChangeViaSettingsBeatsTouchedTranscript(t *testing.T) {
+	root := writeSettings(t, `{"model":"opus","effortLevel":"high"}`)
+	cwd := "/proj"
+	writeTranscript(t, root, cwd, "s1",
+		`{"type":"assistant","timestamp":"2026-07-04T10:00:00.000Z","message":{"model":"claude-fable-5"}}`,
+		`{"type":"user","timestamp":"2026-07-05T09:00:00.000Z","message":{}}`, // the /model command's own entry
+	)
+	writeRegistryEntry(t, root, "s1", cwd)
+	// The transcript file was just written — its mtime is NEWER than
+	// settings.json's; the old file-mtime arbitration showed fable here.
+	old := time.Now().Add(-time.Minute)
+	if err := os.Chtimes(root.SettingsPath(), old, old); err != nil {
+		t.Fatal(err)
+	}
+	if s := NewAt(root).State(0, cwd); s.Model != "opus" {
+		t.Errorf("got model %q, want opus (settings newer than the model FACT, not the file)", s.Model)
+	}
+}
+
 // HasSession is strip mode's pane-scan predicate: the same registry
 // resolution State uses, as a yes/no. Fail-open like everything here —
 // no registry entry (or no root at all) means false, never an error.
