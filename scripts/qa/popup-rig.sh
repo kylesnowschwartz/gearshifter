@@ -35,8 +35,14 @@ trap cleanup EXIT
 sleep 1
 ORIGIN=$(tmux -L "$SOCK" display-message -p -t rig '#{pane_id}')
 
-open_popup() {
+open_popup() { # extra pick args pass through (e.g. --layout telescope)
   tmux -L "$SOCK" display-popup -E -w 70% -h 60% \
+    "$PWD/bin/gearshifter pick --pane $ORIGIN --cwd $PWD $*" &
+  sleep 1.5
+}
+
+open_deck() { # -h 90%: the deck needs ~21 inner rows (min-canvas rule degrades below)
+  tmux -L "$SOCK" display-popup -E -w 70% -h 90% \
     "$PWD/bin/gearshifter pick --pane $ORIGIN --cwd $PWD" &
   sleep 1.5
 }
@@ -49,8 +55,8 @@ click_at() { # col row (1-based screen coords)
     | tmux load-buffer -b rigsgr - && tmux paste-buffer -b rigsgr -d -t "$HOST"
 }
 
-echo "1. popup opens and lists the catalog"
-open_popup
+echo "1. telescope popup opens and lists the catalog"
+open_popup --layout telescope
 host_screen | rg -q '/add-dir' && ok "catalog visible" || bad "catalog visible"
 
 echo "2. typing filters; Enter injects with Enter (hintless command executes)"
@@ -62,7 +68,7 @@ sleep 1.5
 origin_screen | rg -q 'no such file.*agents' && ok "/agents injected+executed" || bad "/agents injected+executed"
 
 echo "3. required-arg command inserts WITHOUT Enter"
-open_popup
+open_popup --layout telescope
 send_host b t w
 sleep 0.4
 send_host Enter
@@ -73,7 +79,7 @@ else bad "/btw inserted unexecuted"; fi
 tmux -L "$SOCK" send-keys -t rig C-u
 
 echo "4. Tab inserts without Enter regardless of hint"
-open_popup
+open_popup --layout telescope
 send_host c o n t e x
 sleep 0.4
 send_host Tab
@@ -84,7 +90,7 @@ else bad "tab insert-only"; fi
 tmux -L "$SOCK" send-keys -t rig C-u
 
 echo "5. mouse click on a located row selects it"
-open_popup
+open_popup --layout telescope
 send_host d o c t
 sleep 0.4
 SCREEN=$(host_screen)
@@ -99,11 +105,47 @@ fi
 
 echo "6. Esc cancels with zero side effects"
 before=$(origin_screen | tail -1)
-open_popup
+open_popup --layout telescope
 send_host Escape
 sleep 1
 after=$(origin_screen | tail -1)
 [ "$before" = "$after" ] && ok "esc no side effects" || bad "esc no side effects"
+
+echo "7. default layout is the deck (M3 flip)"
+open_deck
+host_screen | rg -q 'GEARSHIFTER' && ok "deck opens by default" || bad "deck opens by default"
+host_screen | rg -q 'MODEL' && ok "gear rail visible" || bad "gear rail visible"
+
+echo "8. clicking a button tile fires its command end-to-end"
+SCREEN=$(host_screen)
+ROW=$(echo "$SCREEN" | grep -n 'REVIEW' | head -1 | cut -d: -f1 || true)
+if [ -z "$ROW" ]; then bad "deck button click (REVIEW not found)"; else
+  LINE=$(echo "$SCREEN" | sed -n "${ROW}p")
+  PREFIX=${LINE%%REVIEW*}
+  click_at $(( ${#PREFIX} + 3 )) "$ROW"
+  sleep 1.5
+  origin_screen | rg -q 'no such file.*review' && ok "deck button click" || bad "deck button click"
+fi
+
+echo "9. clicking a gear value injects '/model <value>'"
+open_deck
+SCREEN=$(host_screen)
+ROW=$(echo "$SCREEN" | grep -n 'sonnet' | head -1 | cut -d: -f1 || true)
+if [ -z "$ROW" ]; then bad "gear value click (sonnet not found)"; else
+  LINE=$(echo "$SCREEN" | sed -n "${ROW}p")
+  PREFIX=${LINE%%sonnet*}
+  click_at $(( ${#PREFIX} + 2 )) "$ROW"
+  sleep 1.5
+  origin_screen | rg -q 'no such file.*model' && ok "gear value click" || bad "gear value click"
+fi
+
+echo "10. Esc on the deck cancels with zero side effects"
+before=$(origin_screen | tail -1)
+open_deck
+send_host Escape
+sleep 1
+after=$(origin_screen | tail -1)
+[ "$before" = "$after" ] && ok "deck esc no side effects" || bad "deck esc no side effects"
 
 echo
 echo "popup-rig: $pass passed, $fail failed"

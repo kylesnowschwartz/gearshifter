@@ -54,13 +54,17 @@ Sources of truth (all in `.agent-history/`, git-ignored, disk-only):
 
 ## State / next steps
 
-No code yet — repo holds only this file plus `.agent-history/` docs.
+M0–M3 shipped; **M4 polish is next**. The deck is the default UI
+(`just popup`, `prefix+C-g` via `bind-dev`); telescope stays one flag away.
+Dev loop: `just check` after every substantive change; `just qa-rig`
+(popup rig, 12 assertions incl. deck click end-to-end) before merging
+UI work.
 
-Done (2026-07-04): M0 injection spike (passed, recipe above); product spec v1;
-interview settled D1–D4; architecture draft (module tree, widget taxonomy,
-message design, layout.toml sketch); prior-art survey (SPEC §1.1 — no direct
-competitor; craftzdog/tmux-claude-session-manager and sainnhe/tmux-fzf are the
-reference implementations; "gearshifter" name unclaimed).
+Done foundations (2026-07-04): M0 injection spike (recipe above); product
+spec v1; interview settled D1–D4; architecture draft; prior-art survey
+(SPEC §1.1 — no direct competitor; craftzdog/tmux-claude-session-manager
+and sainnhe/tmux-fzf are the reference implementations; "gearshifter"
+name unclaimed).
 
 Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
 
@@ -99,16 +103,27 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
    input flush and is silently discarded (V6, M2-PALETTE.md); nested
    lipgloss styles reset ANSI mid-row (style highlighted rows once,
    unstyled parts).
-4. **M3 deck (next):** grid, Button/Gear/Launcher tiles, layout.toml,
-   Layer/Compositor hit-testing; palette embeds behind the Launcher tile
-   (`internal/palette.Model` is self-contained). Gear-state spike (V7) here.
-   `pick --layout` flag already exists (inbuilt `telescope` = the M2
-   fullscreen palette, current default): deck registers there, becomes the
-   default, telescope stays a user toggle — never delete it. Custom
-   layout.toml paths resolve through the same flag.
-5. **M4 polish** (TPM bootstrap, goreleaser, CI, bump/release recipes) →
-   **M5 aesthetic** (themes, sprites, animation; glamour "dark" hardcoding
-   revisit if preview ever returns).
+4. **M3 deck: DONE (2026-07-05, merged to main).** Full phase log in
+   M3-DECK.md. 13-col Fibonacci grid (`deck`), Button/Gear/Launcher tiles
+   (`widget`), lipgloss Layer/Compositor hit-testing (one compositor
+   renders AND answers clicks), embedded palette behind the Launcher and
+   `/`. V7 answered: gears read `~/.claude/settings.json` (model,
+   effortLevel), session-specific model via pane pid → sessions registry →
+   transcript scan, mtime-arbitrated (`internal/agent` Provider seam,
+   `agent/claude` implementation). layout.toml (`internal/layout`,
+   go-toml/v2 strict): [[tile]] col+span, rows always derived by skyline
+   `flow`, line-precise errors to the status line, `examples/layout.toml`
+   pinned to `Default` by test; min-canvas rule degrades to a clear
+   message. **Deck is the binary default**; telescope = `--layout
+   telescope`, never delete it. Post-review refactor (e319781): app
+   records selection / main injects; `layout` is the only bridge package.
+5. **M4 polish (next):** TPM bootstrap, goreleaser, CI, bump/release
+   recipes; parked here: opt-in per-session effort shim (hook/statusline),
+   public session-state package extraction behind `agent.Provider`,
+   tmux @options (`internal/config`) incl. custom layout path for
+   keybindings → **M5 aesthetic** (house palette DMG vs PICO-8 — mocks
+   favor PICO-8 — clawd mascot sprite, wordmark grid-break treatment,
+   themes/animation).
 
 Open items:
 
@@ -118,8 +133,9 @@ Open items:
   inline, sprites in block zones). Decision driver: information density per
   screen and whether a 'condensed' layout exists. Glyphs win density;
   sprites win portability/color.
-- House palette: DMG green vs PICO-8 (clawd's orange favors PICO-8).
-- V7 gear-state display (how tiles learn the session's current model/effort):
-  capture-pane sniff vs state file vs stateless — ARCHITECTURE.md §5, target M3.
+- House palette: DMG green vs PICO-8 (clawd's orange favors PICO-8), M5.
+- Per-session /effort display: no per-session disk source exists (only
+  statusline stdin / hook payloads carry effort.level) — opt-in shim
+  parked for M4+; gears show the global value meanwhile.
 - Smaller spec items (SPEC §12): V1 plugin active-version resolution, V5
   shadowing precedence, V6 input queuing while Claude is generating.

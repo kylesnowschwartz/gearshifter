@@ -22,14 +22,14 @@ import (
 
 var version = "dev" // set via -ldflags at release time
 
-// Inbuilt layout names for the pick UI. telescope is the original
-// fullscreen searchable palette (M2); deck is the M3 tile grid (becomes
-// the default at M3 close). Custom layout.toml paths resolve here too;
-// telescope stays available as a user toggle.
+// Inbuilt layout names for the pick UI. deck is the M3 tile grid, the
+// default since M3 close; telescope is the original fullscreen searchable
+// palette (M2), kept forever as a user toggle. Custom layout.toml paths
+// resolve through the same flag.
 const (
 	layoutTelescope = "telescope"
 	layoutDeck      = "deck"
-	defaultLayout   = layoutTelescope
+	defaultLayout   = layoutDeck
 )
 
 const usage = `gearshifter — a tmux control deck for Claude Code slash commands
@@ -43,8 +43,8 @@ Usage:
 Subcommands:
   pick     Open the interactive UI (run it inside tmux display-popup);
            selecting a command injects it into the target pane and
-           presses Enter. --layout picks the UI: telescope (fullscreen
-           searchable palette, the default), deck (the tile grid), or a
+           presses Enter. --layout picks the UI: deck (the tile grid,
+           the default), telescope (fullscreen searchable palette), or a
            path to a layout.toml (see examples/layout.toml).
   list     Print the available slash commands as TSV: name, source,
            argument hint, description. Default sources are
