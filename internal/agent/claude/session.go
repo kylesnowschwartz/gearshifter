@@ -2,7 +2,6 @@ package claude
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/kylesnowschwartz/agent-ouija/claude/claudedir"
@@ -35,7 +34,7 @@ func sessionState(root claudedir.Root, panePID int, paneCwd string) agent.State 
 	if !ok {
 		return state
 	}
-	transcriptPath := filepath.Join(root.ProjectDirFor(entry.Cwd), entry.SessionID+".jsonl")
+	transcriptPath := root.SessionTranscriptPath(entry.Cwd, entry.SessionID)
 	model, transcriptTime := transcript.LastAssistantModel(transcriptPath)
 	if model == "" {
 		return state
