@@ -166,8 +166,9 @@ type ChromeStyles struct {
 	// Mascot sprite colors (clawd.go). nil MascotBody means no mascot —
 	// the sprite is pure decoration, so plain (the reduced-decoration
 	// path) leaves it unset. MascotGlyph styles the opt-in 1-cell footer
-	// glyph, which is a font glyph, not a sprite: it inherits attributes
-	// fine, so plain carries a style for it too.
+	// glyph, which is a font glyph, not a sprite: plain leaves it
+	// zero-valued and the glyph renders unstyled, inheriting the
+	// terminal's text color — exactly plain's path.
 	MascotBody  color.Color
 	MascotEye   color.Color
 	MascotGlyph lipgloss.Style
