@@ -50,6 +50,10 @@ var glyphs = map[string]string{
 	"mcp":            "⬡",
 	"permissions":    "⚷",
 	"reload-plugins": "⟳",
+	"plugin":         "⌘",
+	"rename":         "✎",
+	"radio":          "♫",
+	"goal":           "⌾",
 }
 
 // GlyphFallback marks chips for commands the table doesn't know.

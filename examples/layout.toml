@@ -80,38 +80,14 @@ span    = 2
 
 [[tile]]
 type    = "button"
-command = "memory"
-col     = 11
-span    = 2
-
-[[tile]]
-type    = "button"
-command = "cost"
-col     = 5
-span    = 2
-
-[[tile]]
-type    = "button"
 command = "doctor"
-col     = 7
-span    = 2
-
-[[tile]]
-type    = "button"
-command = "export"
-col     = 9
-span    = 2
-
-[[tile]]
-type    = "button"
-command = "statusline"
-label   = "STATUS"
 col     = 11
 span    = 2
 
 [[tile]]
 type    = "button"
-command = "hooks"
+command = "goal"
+insert  = true
 col     = 5
 span    = 2
 
@@ -123,15 +99,39 @@ span    = 2
 
 [[tile]]
 type    = "button"
+command = "memory"
+col     = 9
+span    = 2
+
+[[tile]]
+type    = "button"
 command = "permissions"
 label   = "PERMS"
-col     = 9
+col     = 11
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "plugin"
+col     = 5
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "radio"
+col     = 7
 span    = 2
 
 [[tile]]
 type    = "button"
 command = "reload-plugins"
 label   = "RELOAD"
+col     = 9
+span    = 2
+
+[[tile]]
+type    = "button"
+command = "rename"
 col     = 11
 span    = 2
 

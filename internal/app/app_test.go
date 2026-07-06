@@ -33,7 +33,7 @@ func newTestModel() Model {
 	// haiku/low: cursors start on current (index 0), keeping key-walk
 	// expectations simple.
 	cmds := testCommands()
-	m := New(cmds, layout.Default(cmds, agent.State{Model: "haiku", Effort: "low"}, testStyles), testStyles)
+	m := New(cmds, layout.Default(cmds, agent.State{Model: "haiku", Effort: "low"}, testStyles, layout.SortNone), testStyles)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: 26})
 	return updated.(Model)
 }
@@ -533,7 +533,7 @@ func TestDeckViewRendersTiles(t *testing.T) {
 func compactModel(fired *[]firedCall) Model {
 	state := agent.State{Model: "haiku", Effort: "low"}
 	cmds := testCommands()
-	placements := layout.Compacted(layout.Default(cmds, state, testStyles), state, testStyles)
+	placements := layout.Compacted(layout.Default(cmds, state, testStyles, layout.SortNone), state, testStyles)
 	m := New(cmds, placements, testStyles).Persistent(PersistentHooks{
 		Inject: func(f Fire) error {
 			*fired = append(*fired, firedCall{f.Cmd.Name, f.Arg, f.InsertOnly, f.FromMouse})

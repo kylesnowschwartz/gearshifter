@@ -31,7 +31,7 @@ func TestExampleLayoutReproducesDefaultDeck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Default(cmds, state, testStyles)
+	want := Default(cmds, state, testStyles, SortNone)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load(examples/layout.toml) diverges from Default():\ngot  %+v\nwant %+v", got, want)
 	}
@@ -200,7 +200,7 @@ func TestLoadRejectsInsertOnNonButtons(t *testing.T) {
 // exactly one cell; Compacted resolves authored > theme table > bullet.
 func TestLoadGlyphValidatesAndReachesCompactChip(t *testing.T) {
 	placements, err := Load(writeLayout(t,
-		"[[tile]]\ntype = \"button\"\ncommand = \"goal\"\nglyph = \"⌾\"\n\n[[tile]]\ntype = \"button\"\ncommand = \"radio\""),
+		"[[tile]]\ntype = \"button\"\ncommand = \"goal\"\nglyph = \"⌾\"\n\n[[tile]]\ntype = \"button\"\ncommand = \"ghost\""),
 		nil, agent.State{}, testStyles)
 	if err != nil {
 		t.Fatal(err)
@@ -209,8 +209,8 @@ func TestLoadGlyphValidatesAndReachesCompactChip(t *testing.T) {
 	if v := chips[0].Tile.View(widget.RenderState{}, 12); !strings.Contains(v, "⌾ GOAL") {
 		t.Errorf("authored glyph must win in the compact chip: %q", v)
 	}
-	if v := chips[1].Tile.View(widget.RenderState{}, 12); !strings.Contains(v, theme.GlyphFallback+" RADIO") {
-		t.Errorf("unauthored personal command must fall back to the bullet: %q", v)
+	if v := chips[1].Tile.View(widget.RenderState{}, 12); !strings.Contains(v, theme.GlyphFallback+" GHOST") {
+		t.Errorf("unauthored, table-unknown command must fall back to the bullet: %q", v)
 	}
 
 	for _, c := range []struct{ content, want string }{

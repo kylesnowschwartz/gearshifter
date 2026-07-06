@@ -1,9 +1,8 @@
 # A customized deck: what a personal layout looks like beyond the
-# shipped default. Demonstrates what user layouts reach for — personal
-# slash commands (/goal, /radio), an insert tile (GOAL lands "/goal "
-# unexecuted, ready for its argument), a label override (RELOAD), and
-# wide span-4 buttons where the default went span-2. Point
-# @gearshifter-layout at a copy of this file and edit away.
+# shipped default. Demonstrates what user layouts reach for — an insert
+# tile (GOAL lands "/goal " unexecuted, ready for its argument), a label
+# override (RELOAD), and wide span-4 buttons where the default went
+# span-2. Point @gearshifter-layout at a copy of this file and edit away.
 #
 # No output-style gear: Claude Code dropped /output-style, and /config
 # outputStyle= rejects custom styles non-interactively — no injectable
@@ -54,14 +53,12 @@ span    = 4
 type    = "button"
 command = "goal"
 insert  = true
-glyph   = "⌾" # compact-strip chip glyph; personal commands would otherwise all show "•"
 col     = 5
 span    = 4
 
 [[tile]]
 type    = "button"
 command = "radio"
-glyph   = "♫"
 col     = 9
 span    = 4
 

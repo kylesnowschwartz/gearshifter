@@ -159,12 +159,20 @@ func runPick(args []string) error {
 	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
 	layoutName := fs.String("layout", defaultLayout, "UI layout to open: telescope, deck, or a path to a layout.toml")
 	themeName := fs.String("theme", "default", "color theme: default, or plain (no color)")
+	sortName := fs.String("sort", "", "reorder the built-in deck's filler buttons: alpha (default: data-ranked order); only valid with --layout deck")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	inbuilt, layoutPath, err := resolveLayout(*layoutName)
 	if err != nil {
 		return fmt.Errorf("pick: %w", err)
+	}
+	sortMode, err := parseSort(*sortName)
+	if err != nil {
+		return fmt.Errorf("pick: %w", err)
+	}
+	if sortMode != layout.SortNone && inbuilt != layoutDeck {
+		return fmt.Errorf("pick: --sort only applies to the built-in deck layout, not %q", *layoutName)
 	}
 	styles, err := theme.Load(*themeName)
 	if err != nil {
@@ -186,7 +194,7 @@ func runPick(args []string) error {
 		return err
 	}
 
-	pick, ok, err := runPickUI(inbuilt, layoutPath, cmds, styles, client, *pane)
+	pick, ok, err := runPickUI(inbuilt, layoutPath, cmds, styles, client, *pane, sortMode)
 	if err != nil {
 		return err
 	}
@@ -209,6 +217,7 @@ func runStrip(args []string) error {
 	layoutName := fs.String("layout", defaultLayout, "UI layout: deck or a path to a layout.toml (telescope quits on selection — not strip-compatible)")
 	themeName := fs.String("theme", "default", "color theme: default, or plain (no color)")
 	compact := fs.Bool("compact", false, "render the chip flow (1-row glyph chips) — sized for a ~33-col sidebar pane")
+	sortName := fs.String("sort", "", "reorder the built-in deck's filler buttons: alpha (default: data-ranked order); only valid with --layout deck")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -218,6 +227,13 @@ func runStrip(args []string) error {
 	}
 	if inbuilt == layoutTelescope {
 		return fmt.Errorf("strip: telescope quits on selection; strip needs a deck-shaped layout")
+	}
+	sortMode, err := parseSort(*sortName)
+	if err != nil {
+		return fmt.Errorf("strip: %w", err)
+	}
+	if sortMode != layout.SortNone && inbuilt != layoutDeck {
+		return fmt.Errorf("strip: --sort only applies to the built-in deck layout, not %q", *layoutName)
 	}
 	styles, err := theme.Load(*themeName)
 	if err != nil {
@@ -254,7 +270,7 @@ func runStrip(args []string) error {
 			return fmt.Errorf("strip: %w", err)
 		}
 	} else {
-		placements = layout.Default(cmds, state, styles)
+		placements = layout.Default(cmds, state, styles, sortMode)
 	}
 	if *compact {
 		placements = layout.Compacted(placements, state, styles)
@@ -363,9 +379,21 @@ func resolveLayout(name string) (inbuilt, path string, err error) {
 	return "", name, nil
 }
 
+// parseSort validates --sort. A layout.toml already authors its own tile
+// order, so sort only ever applies to the built-in deck — callers check
+// that separately once resolveLayout has classified --layout.
+func parseSort(raw string) (layout.Sort, error) {
+	switch layout.Sort(raw) {
+	case layout.SortNone, layout.SortAlpha:
+		return layout.Sort(raw), nil
+	default:
+		return "", fmt.Errorf("unknown sort %q — valid: alpha", raw)
+	}
+}
+
 // runPickUI runs the chosen layout's Bubble Tea program and reports the
 // user's selection; ok is false when they cancelled.
-func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, styles *theme.Styles, client *tmux.Client, pane string) (selection, bool, error) {
+func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, styles *theme.Styles, client *tmux.Client, pane string, sortMode layout.Sort) (selection, bool, error) {
 	switch inbuilt {
 	case layoutTelescope:
 		final, err := tea.NewProgram(palette.New(cmds, styles)).Run()
@@ -382,7 +410,7 @@ func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, styles *theme
 		panePID, _ := client.PanePID(pane)
 		paneCwd, _ := client.PaneCwd(pane)
 		state := provider.State(panePID, paneCwd)
-		placements := layout.Default(cmds, state, styles)
+		placements := layout.Default(cmds, state, styles, sortMode)
 		if layoutPath != "" {
 			var err error
 			placements, err = layout.Load(layoutPath, cmds, state, styles)

@@ -6,11 +6,24 @@
 package layout
 
 import (
+	"sort"
+
 	"github.com/kylesnowschwartz/gearshifter/internal/agent"
 	"github.com/kylesnowschwartz/gearshifter/internal/catalog"
 	"github.com/kylesnowschwartz/gearshifter/internal/deck"
 	"github.com/kylesnowschwartz/gearshifter/internal/theme"
 	"github.com/kylesnowschwartz/gearshifter/internal/widget"
+)
+
+// Sort selects how Default's button field orders itself. The zero value,
+// SortNone, keeps the data-ranked reading order (DECK-CONTENT.md); it is
+// not user-choosable data, so only Default (not Load) takes a Sort — a
+// layout.toml already authors its own tile order.
+type Sort string
+
+const (
+	SortNone  Sort = ""
+	SortAlpha Sort = "alpha"
 )
 
 // Placement puts a tile at a grid column and row. All geometry flows
@@ -66,15 +79,48 @@ func flow(entries []entry) []Placement {
 	return placements
 }
 
+// buttonSpec pairs a button's command with its label and insert behavior,
+// before rows or columns are derived.
+type buttonSpec struct {
+	name, label string
+	insert      bool
+}
+
+// sixPack is the data-ranked lead (DECK-CONTENT.md, 2026-07-05); it never
+// reorders, sort or no sort — it's ranked by usage, not alphabetized.
+var sixPack = []buttonSpec{
+	{"compact", "COMPACT", false},
+	{"copy", "COPY", false},
+	{"clear", "CLEAR", false},
+	{"context", "CONTEXT", false},
+	{"resume", "RESUME", false},
+	{"config", "CONFIG", false},
+}
+
+// fillers round out the 4×4 button field with generic built-ins; this is
+// the only group Sort reorders.
+var fillers = []buttonSpec{
+	{"agents", "AGENTS", false},
+	{"doctor", "DOCTOR", false},
+	{"goal", "GOAL", true},
+	{"mcp", "MCP", false},
+	{"memory", "MEMORY", false},
+	{"permissions", "PERMS", false},
+	{"plugin", "PLUGIN", false},
+	{"radio", "RADIO", false},
+	{"reload-plugins", "RELOAD", false},
+	{"rename", "RENAME", false},
+}
+
 // Default builds the default deck: gear rail (span 5, MODEL over EFFORT)
 // beside a 4×4 button field (span 2 each) — the φ split — with the
 // launcher as a full-width bottom bar. Buttons are generic built-ins:
-// the data-ranked six-pack (DECK-CONTENT.md, 2026-07-05) leads in
-// reading order, the rest fill the dense field (flipped from 2×3 the
-// same day, a call made after the dense demo). Placement order =
-// reading order = the app's focus order. state marks each gear's live
-// value (V7); st styles every tile.
-func Default(commands []catalog.Command, state agent.State, st *theme.Styles) []Placement {
+// the data-ranked six-pack leads in reading order, the rest fill the
+// dense field (flipped from 2×3 the same day, a call made after the
+// dense demo). Placement order = reading order = the app's focus order.
+// state marks each gear's live value (V7); st styles every tile; how
+// controls whether the filler group sorts alphabetically.
+func Default(commands []catalog.Command, state agent.State, st *theme.Styles, how Sort) []Placement {
 	model := widget.NewGear(st, findCommand(commands, "model"), "MODEL",
 		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan).
 		WithCurrent(gearSetting("model", state))
@@ -83,26 +129,18 @@ func Default(commands []catalog.Command, state agent.State, st *theme.Styles) []
 		WithCurrent(gearSetting("effort", state))
 	entries := []entry{{tile: model}, {tile: effort}}
 
+	sortedFillers := append([]buttonSpec(nil), fillers...)
+	if how == SortAlpha {
+		sort.Slice(sortedFillers, func(i, j int) bool { return sortedFillers[i].label < sortedFillers[j].label })
+	}
+	buttons := append(append([]buttonSpec(nil), sixPack...), sortedFillers...)
+
 	buttonSpan := deck.MainSpan / buttonsPerRow
-	for i, b := range []struct{ name, label string }{
-		{"compact", "COMPACT"},
-		{"copy", "COPY"},
-		{"clear", "CLEAR"},
-		{"context", "CONTEXT"},
-		{"resume", "RESUME"},
-		{"config", "CONFIG"},
-		{"agents", "AGENTS"},
-		{"memory", "MEMORY"},
-		{"cost", "COST"},
-		{"doctor", "DOCTOR"},
-		{"export", "EXPORT"},
-		{"statusline", "STATUS"},
-		{"hooks", "HOOKS"},
-		{"mcp", "MCP"},
-		{"permissions", "PERMS"},
-		{"reload-plugins", "RELOAD"},
-	} {
+	for i, b := range buttons {
 		btn := widget.NewButton(st, findCommand(commands, b.name), b.label, buttonSpan)
+		if b.insert {
+			btn = btn.WithInsert()
+		}
 		entries = append(entries, entry{tile: btn, col: deck.RailSpan + (i%buttonsPerRow)*buttonSpan})
 	}
 
