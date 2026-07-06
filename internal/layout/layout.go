@@ -86,8 +86,9 @@ type buttonSpec struct {
 	insert      bool
 }
 
-// sixPack is the data-ranked lead (DECK-CONTENT.md, 2026-07-05); it never
-// reorders, sort or no sort — it's ranked by usage, not alphabetized.
+// sixPack is the data-ranked lead (DECK-CONTENT.md, 2026-07-05): ranked
+// by usage, not alphabetized. It only holds that rank order under
+// SortNone — SortAlpha treats the whole field as one alphabetized list.
 var sixPack = []buttonSpec{
 	{"compact", "COMPACT", false},
 	{"copy", "COPY", false},
@@ -97,8 +98,7 @@ var sixPack = []buttonSpec{
 	{"config", "CONFIG", false},
 }
 
-// fillers round out the 4×4 button field with generic built-ins; this is
-// the only group Sort reorders.
+// fillers round out the 4×4 button field with generic built-ins.
 var fillers = []buttonSpec{
 	{"agents", "AGENTS", false},
 	{"doctor", "DOCTOR", false},
@@ -115,11 +115,11 @@ var fillers = []buttonSpec{
 // Default builds the default deck: gear rail (span 5, MODEL over EFFORT)
 // beside a 4×4 button field (span 2 each) — the φ split — with the
 // launcher as a full-width bottom bar. Buttons are generic built-ins:
-// the data-ranked six-pack leads in reading order, the rest fill the
-// dense field (flipped from 2×3 the same day, a call made after the
-// dense demo). Placement order = reading order = the app's focus order.
-// state marks each gear's live value (V7); st styles every tile; how
-// controls whether the filler group sorts alphabetically.
+// under SortNone the data-ranked six-pack leads in reading order and the
+// rest fill the dense field (flipped from 2×3 the same day, a call made
+// after the dense demo); under SortAlpha the whole field alphabetizes,
+// six-pack included. Placement order = reading order = the app's focus
+// order. state marks each gear's live value (V7); st styles every tile.
 func Default(commands []catalog.Command, state agent.State, st *theme.Styles, how Sort) []Placement {
 	model := widget.NewGear(st, findCommand(commands, "model"), "MODEL",
 		[]string{"haiku", "sonnet", "opus", "fable"}, deck.RailSpan).
@@ -129,11 +129,10 @@ func Default(commands []catalog.Command, state agent.State, st *theme.Styles, ho
 		WithCurrent(gearSetting("effort", state))
 	entries := []entry{{tile: model}, {tile: effort}}
 
-	sortedFillers := append([]buttonSpec(nil), fillers...)
+	buttons := append(append([]buttonSpec(nil), sixPack...), fillers...)
 	if how == SortAlpha {
-		sort.Slice(sortedFillers, func(i, j int) bool { return sortedFillers[i].label < sortedFillers[j].label })
+		sort.Slice(buttons, func(i, j int) bool { return buttons[i].label < buttons[j].label })
 	}
-	buttons := append(append([]buttonSpec(nil), sixPack...), sortedFillers...)
 
 	buttonSpan := deck.MainSpan / buttonsPerRow
 	for i, b := range buttons {

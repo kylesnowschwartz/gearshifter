@@ -49,26 +49,16 @@ func TestDefaultPlacementOrderIsReadingOrder(t *testing.T) {
 	}
 }
 
-// SortAlpha only reorders the filler group; sixPack is data-ranked and
-// must never move. fillers already ships alphabetized, so this swaps in
-// a deliberately unsorted stand-in to prove the sort actually runs
-// rather than coincidentally matching the shipped order.
-func TestDefaultSortAlphaReordersFillersNotSixPack(t *testing.T) {
-	orig := fillers
-	fillers = []buttonSpec{
-		{"reload-plugins", "RELOAD", false},
-		{"agents", "AGENTS", false},
-		{"mcp", "MCP", false},
-	}
-	defer func() { fillers = orig }()
-
-	sixPackAndUnsorted := []string{"MODEL", "EFFORT", "COMPACT", "COPY", "CLEAR", "CONTEXT",
-		"RESUME", "CONFIG", "RELOAD", "AGENTS", "MCP"}
-	assertPlacementLabels(t, Default(nil, agent.State{}, testStyles, SortNone), sixPackAndUnsorted)
-
-	sixPackAndSorted := []string{"MODEL", "EFFORT", "COMPACT", "COPY", "CLEAR", "CONTEXT",
-		"RESUME", "CONFIG", "AGENTS", "MCP", "RELOAD"}
-	assertPlacementLabels(t, Default(nil, agent.State{}, testStyles, SortAlpha), sixPackAndSorted)
+// SortAlpha treats the whole 16-button field as one alphabetized list,
+// six-pack included — unlike SortNone, which leads with the six-pack's
+// usage rank. The six-pack's shipped order (COMPACT, COPY, CLEAR, ...)
+// isn't alphabetical, so seeing it reshuffle here proves the sort runs.
+func TestDefaultSortAlphaSortsWholeField(t *testing.T) {
+	want := []string{"MODEL", "EFFORT",
+		"AGENTS", "CLEAR", "COMPACT", "CONFIG", "CONTEXT", "COPY",
+		"DOCTOR", "GOAL", "MCP", "MEMORY", "PERMS", "PLUGIN",
+		"RADIO", "RELOAD", "RENAME", "RESUME"}
+	assertPlacementLabels(t, Default(nil, agent.State{}, testStyles, SortAlpha), want)
 }
 
 func TestFindCommandFallsBackToBareName(t *testing.T) {

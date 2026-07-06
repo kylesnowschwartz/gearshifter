@@ -159,7 +159,7 @@ func runPick(args []string) error {
 	sources := fs.String("sources", "", "comma-separated source filter: user,project,builtin,plugin (default: user,project,builtin)")
 	layoutName := fs.String("layout", defaultLayout, "UI layout to open: telescope, deck, or a path to a layout.toml")
 	themeName := fs.String("theme", "default", "color theme: default, or plain (no color)")
-	sortName := fs.String("sort", "", "reorder the built-in deck's filler buttons: alpha (default: data-ranked order); only valid with --layout deck")
+	sortName := fs.String("sort", "", "sort order for the built-in deck's buttons: alpha (default: data-ranked six-pack + generic fillers); only valid with --layout deck")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -217,7 +217,7 @@ func runStrip(args []string) error {
 	layoutName := fs.String("layout", defaultLayout, "UI layout: deck or a path to a layout.toml (telescope quits on selection — not strip-compatible)")
 	themeName := fs.String("theme", "default", "color theme: default, or plain (no color)")
 	compact := fs.Bool("compact", false, "render the chip flow (1-row glyph chips) — sized for a ~33-col sidebar pane")
-	sortName := fs.String("sort", "", "reorder the built-in deck's filler buttons: alpha (default: data-ranked order); only valid with --layout deck")
+	sortName := fs.String("sort", "", "sort order for the built-in deck's buttons: alpha (default: data-ranked six-pack + generic fillers); only valid with --layout deck")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
