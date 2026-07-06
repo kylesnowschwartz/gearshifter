@@ -119,17 +119,22 @@ events bounded by RENDERED rows; model badge arbitrates by transcript
 ENTRY time, not file mtime (agent-ouija v1.1.0 LastAssistantModelAt,
 pin bumped). Live as a tcm companion pane (tcm-side spec:
 tail-claude-mux/.agent-history/COMPANION-PANE-SPEC.md; the maintainer runs
-`--theme plain`). Steps 4–5 in flight (2026-07-06 interview): step 5
-embed docs = README persistent-pane section (the maintainer's primary
+`--theme plain`). Steps 4–5 SHIPPED 2026-07-06, closing STRIP-EMBED:
+step 5 = README persistent-pane section (the maintainer's primary
 usage; manual install only — TPM QA explicitly skipped, "too much
-trouble for no users yet"); step 4 mascot = deck (P3 k9s recipe) +
-full strip (2–3-row variant authored at size) + OPT-IN compact footer
-glyph U+100CC0 (clawd-icon Clawd.ttf, ~/Code/dotfiles/clawd-icon —
-1-cell, inherits text color so it survives plain; own config path,
-EXEMPT from the chip-glyph EA-Neutral rule; renders tofu without the
-font, hence opt-in). NOT in compact rows (chips own every row) and no
-sprite under plain. Perf notes in STRIP-EMBED.md CLOSED ("perf seems
-fine").** Distribution is parked as M6
+trouble for no users yet"); step 4 = clawd mascot, Kyle-QA'd: ONE
+embedded 16×5 role grid (internal/theme/clawd.go + clawd_grid.json,
+trademark ack in README) renders solid at 5 spare base rows,
+half-block mini at 3–4, retracts below — deck popup + full strip,
+base layer only (never a hit target, never moves a tile), nil
+Chrome.MascotBody gates it off in plain; off switch --mascot=false /
+@gearshifter-mascot off. Compact never gets the sprite (chips own
+every row); its mascot is the OPT-IN --mascot-glyph footer glyph
+(U+100CC0 via clawd-icon Clawd.ttf, ~/Code/dotfiles/clawd-icon —
+1-cell, inherits text color so it survives plain; errors without
+--compact; renders tofu without the font, hence opt-in). Perf notes
+in STRIP-EMBED.md CLOSED ("perf seems fine").** Distribution is
+parked as M6
 until someone besides the maintainer wants an install. The deck is the default
 UI; a `run-shell .../gearshifter.tmux` line in tmux.conf owns the
 permanent `prefix+C-g` binding (`just bind-dev` sources the same
