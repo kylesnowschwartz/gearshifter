@@ -135,6 +135,12 @@ type Model struct {
 	// (STRIP-EMBED step 2): chips snap to a column grid, wrapping at
 	// the canvas edge, no wordmark — built for the ~33-col tcm sidebar.
 	compact bool
+
+	// noMascot suppresses the clawd sprite (--mascot=false /
+	// @gearshifter-mascot off); mascotGlyph opts the compact footer into
+	// the 1-cell clawd font glyph (--mascot-glyph, needs Clawd.ttf).
+	noMascot    bool
+	mascotGlyph bool
 }
 
 // New builds the app over a placed deck (layout.Default or, from P4, a
@@ -148,6 +154,20 @@ func New(commands []catalog.Command, placements []layout.Placement, st *theme.St
 // must already be chip tiles (layout.Compacted).
 func (m Model) Compact() Model {
 	m.compact = true
+	return m
+}
+
+// WithoutMascot suppresses the clawd sprite regardless of theme or
+// canvas room (the @gearshifter-mascot off switch).
+func (m Model) WithoutMascot() Model {
+	m.noMascot = true
+	return m
+}
+
+// WithMascotGlyph opts the compact footer into the 1-cell clawd glyph
+// (theme.ClawdGlyph) — opt-in because it needs Clawd.ttf installed.
+func (m Model) WithMascotGlyph() Model {
+	m.mascotGlyph = true
 	return m
 }
 
@@ -611,10 +631,34 @@ func (m Model) compositor() *lipgloss.Compositor {
 		// the strip has no closing flash to say "it landed".
 		hint = m.notice
 	}
+	if !m.compact && !m.noMascot && m.width >= 2*marginX+theme.MascotWidth {
+		// The mascot fills rows left between the tile field and the
+		// footer — the full 5-row clawd, the 3-row mini, or nothing (P3
+		// k9s recipe: it retracts before it crowds). Base layer only:
+		// never a hit target, never moves a tile.
+		if sprite := m.styles.Mascot(m.height - len(base) - 1); sprite != nil {
+			pad := strings.Repeat(" ", m.width-marginX-theme.MascotWidth)
+			for _, row := range sprite {
+				base = append(base, pad+row)
+			}
+		}
+	}
 	// The footer (hint or a long tmux error) must never exceed the
 	// canvas — over-wide lines clip cell-by-cell downstream, losing the
 	// tail silently; truncating here keeps the cut honest.
-	base = append(base, margin+m.styles.Chrome.Footer.Render(widget.Truncate(hint, max(0, m.width-2*marginX))))
+	footerW := max(0, m.width-2*marginX)
+	if m.compact && m.mascotGlyph {
+		// Reserve the right corner for the opt-in clawd font glyph
+		// (1 cell + 1 gap) — compact's whole-row mascot budget.
+		footerW = max(0, footerW-2)
+	}
+	hint = widget.Truncate(hint, footerW)
+	footer := margin + m.styles.Chrome.Footer.Render(hint)
+	if m.compact && m.mascotGlyph {
+		gap := max(1, m.width-marginX-1-marginX-lipgloss.Width(hint))
+		footer += strings.Repeat(" ", gap) + m.styles.Chrome.MascotGlyph.Render(theme.ClawdGlyph)
+	}
+	base = append(base, footer)
 	baseLayer := lipgloss.NewLayer(strings.Join(base, "\n")).X(0).Y(0).Z(0)
 
 	return lipgloss.NewCompositor(append([]*lipgloss.Layer{baseLayer}, layers...)...)

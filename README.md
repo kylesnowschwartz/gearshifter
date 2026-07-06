@@ -28,6 +28,7 @@ Set via `tmux set-option -g`:
 | `@gearshifter-theme` | `default` \| `plain` | `default` |
 | `@gearshifter-width` | popup width | `70%` |
 | `@gearshifter-height` | popup height | `85%` |
+| `@gearshifter-mascot` | `on` \| `off` | `on` — clawd renders when the canvas has spare rows (colored themes only) |
 
 See `examples/layout.toml` and `examples/dense.toml` for custom deck layouts.
 
@@ -52,7 +53,9 @@ Behavior worth knowing before you rely on it:
 - **Tab inserts without Enter**, same as the popup; commands with required arguments always insert without firing.
 - Gear values refresh on a timer, so the MODEL/EFFORT chips track settings changes made in Claude itself.
 
-Flags: `--pane`, `--cwd`, `--sources`, `--layout` (deck or a `layout.toml` path — telescope is popup-only), `--theme`, `--compact`, `--sort alpha`.
+Flags: `--pane`, `--cwd`, `--sources`, `--layout` (deck or a `layout.toml` path — telescope is popup-only), `--theme`, `--compact`, `--sort alpha`, `--mascot=false`, `--mascot-glyph`.
+
+`--mascot-glyph` puts a 1-cell clawd in the compact footer's right corner. It's opt-in because it renders through the `Clawd.ttf` single-glyph font (code point `U+100CC0`, Plane 16 PUA) — without that font installed you get a tofu box.
 
 ### As a tail-claude-mux companion pane
 
@@ -79,3 +82,5 @@ just check   # fmt, vet, test
 ## License
 
 [MIT](LICENSE)
+
+Clawd — the mascot rendered by the deck sprite and the optional footer glyph — is the Claude Code mascot, a mark of Anthropic, used here as an acknowledgment, not an original design.

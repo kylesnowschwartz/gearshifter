@@ -162,6 +162,15 @@ type ChromeStyles struct {
 	WordmarkBlend []color.Color
 	Footer        lipgloss.Style
 	Degraded      lipgloss.Style // the canvas-too-small message
+
+	// Mascot sprite colors (clawd.go). nil MascotBody means no mascot —
+	// the sprite is pure decoration, so plain (the reduced-decoration
+	// path) leaves it unset. MascotGlyph styles the opt-in 1-cell footer
+	// glyph, which is a font glyph, not a sprite: it inherits attributes
+	// fine, so plain carries a style for it too.
+	MascotBody  color.Color
+	MascotEye   color.Color
+	MascotGlyph lipgloss.Style
 }
 
 // ListStyles renders the palette screen (telescope + embedded).
@@ -212,6 +221,9 @@ func New(p Palette) *Styles {
 			WordmarkBlend: []color.Color{p.Accent, p.AccentAlt},
 			Footer:        fgMuted,
 			Degraded:      fgMuted,
+			MascotBody:    p.Accent,
+			MascotEye:     p.BgBase,
+			MascotGlyph:   lipgloss.NewStyle().Foreground(p.Accent),
 		},
 		List: ListStyles{
 			Prompt: lipgloss.NewStyle().Bold(true).Foreground(p.FgBase),

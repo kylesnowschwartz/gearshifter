@@ -6,6 +6,7 @@
 #   @gearshifter-theme    default | plain                           (default: default)
 #   @gearshifter-width    popup width                               (default: 70%)
 #   @gearshifter-height   popup height                              (default: 85% — the 4×4 deck needs ~24 rows)
+#   @gearshifter-mascot   on | off                                  (default: on — clawd shows when rows are spare)
 #
 # WARNING (V6): never trigger this from a Claude `!` command — injection
 # races the !-completion input flush and is silently discarded.
@@ -21,6 +22,9 @@ opt() {
   echo "${v:-$2}"
 }
 
+mascot=true
+[ "$(opt @gearshifter-mascot on)" = off ] && mascot=false
+
 exec tmux display-popup -E \
   -w "$(opt @gearshifter-width 70%)" -h "$(opt @gearshifter-height 85%)" \
-  "\"$ROOT/bin/gearshifter\" pick --layout \"$(opt @gearshifter-layout deck)\" --theme \"$(opt @gearshifter-theme default)\" --pane \"$pane\" --cwd \"$cwd\""
+  "\"$ROOT/bin/gearshifter\" pick --layout \"$(opt @gearshifter-layout deck)\" --theme \"$(opt @gearshifter-theme default)\" --mascot=$mascot --pane \"$pane\" --cwd \"$cwd\""

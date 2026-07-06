@@ -752,3 +752,57 @@ func TestCompactGearExpansionNeverReflowsChips(t *testing.T) {
 		}
 	}
 }
+
+// Mascot (strip step 4 / M5 P3): clawd fills the base rows left between
+// the tile field and the footer, retracts before it crowds, and is
+// suppressible; the compact footer's mascot is the opt-in font glyph.
+
+func mascotModel(t *testing.T, height int) Model {
+	t.Helper()
+	styles, err := theme.Load("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmds := testCommands()
+	m := New(cmds, layout.Default(cmds, agent.State{}, styles, layout.SortNone), styles)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 82, Height: height})
+	return updated.(Model)
+}
+
+func TestMascotFillsSpareRowsAndRetracts(t *testing.T) {
+	_, tileRows := mascotModel(t, 60).minCanvas()
+
+	full := mascotModel(t, tileRows+8).View().Content
+	if !strings.Contains(full, "█") {
+		t.Error("spare rows for the 5-row clawd must render it solid")
+	}
+	mini := mascotModel(t, tileRows+5).View().Content
+	if strings.Contains(mini, "█") || !strings.Contains(mini, "▀") {
+		t.Error("3 spare rows must degrade to the half-block mini")
+	}
+	none := mascotModel(t, tileRows+2).View().Content
+	if strings.Contains(none, "█") || strings.Contains(none, "▀") {
+		t.Error("without spare rows the mascot must retract entirely")
+	}
+	off := mascotModel(t, tileRows+8).WithoutMascot().View().Content
+	if strings.Contains(off, "█") || strings.Contains(off, "▀") {
+		t.Error("WithoutMascot must suppress the sprite regardless of room")
+	}
+}
+
+func TestCompactFooterGlyphIsOptIn(t *testing.T) {
+	var fired []firedCall
+	m := compactModel(&fired)
+	if strings.Contains(m.View().Content, theme.ClawdGlyph) {
+		t.Error("the footer glyph needs Clawd.ttf — it must be opt-in")
+	}
+	content := m.WithMascotGlyph().View().Content
+	if !strings.Contains(content, theme.ClawdGlyph) {
+		t.Error("WithMascotGlyph must render the clawd glyph in the footer")
+	}
+	for i, line := range strings.Split(content, "\n") {
+		if w := lipgloss.Width(line); w > 33 {
+			t.Errorf("line %d is %d cells — the glyph must not overflow the canvas:\n%q", i, w, line)
+		}
+	}
+}

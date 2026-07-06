@@ -160,6 +160,7 @@ func runPick(args []string) error {
 	layoutName := fs.String("layout", defaultLayout, "UI layout to open: telescope, deck, or a path to a layout.toml")
 	themeName := fs.String("theme", "default", "color theme: default, or plain (no color)")
 	sortName := fs.String("sort", "", "sort order for the built-in deck's buttons: alpha (default: data-ranked six-pack + generic fillers); only valid with --layout deck")
+	mascot := fs.Bool("mascot", true, "render the clawd mascot when the canvas has spare rows (colored themes only)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -194,7 +195,7 @@ func runPick(args []string) error {
 		return err
 	}
 
-	pick, ok, err := runPickUI(inbuilt, layoutPath, cmds, styles, client, *pane, sortMode)
+	pick, ok, err := runPickUI(inbuilt, layoutPath, cmds, styles, client, *pane, sortMode, *mascot)
 	if err != nil {
 		return err
 	}
@@ -218,8 +219,13 @@ func runStrip(args []string) error {
 	themeName := fs.String("theme", "default", "color theme: default, or plain (no color)")
 	compact := fs.Bool("compact", false, "render the chip flow (1-row glyph chips) — sized for a ~33-col sidebar pane")
 	sortName := fs.String("sort", "", "sort order for the built-in deck's buttons: alpha (default: data-ranked six-pack + generic fillers); only valid with --layout deck")
+	mascot := fs.Bool("mascot", true, "render the clawd mascot when the pane has spare rows (colored themes only, never compact)")
+	mascotGlyph := fs.Bool("mascot-glyph", false, "render the 1-cell clawd glyph in the compact footer (requires the Clawd.ttf font); only valid with --compact")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *mascotGlyph && !*compact {
+		return fmt.Errorf("strip: --mascot-glyph is the compact footer's mascot; the full strip renders the sprite (drop the flag or add --compact)")
 	}
 	inbuilt, layoutPath, err := resolveLayout(*layoutName)
 	if err != nil {
@@ -314,6 +320,12 @@ func runStrip(args []string) error {
 	if *compact {
 		model = model.Compact()
 	}
+	if !*mascot {
+		model = model.WithoutMascot()
+	}
+	if *mascotGlyph {
+		model = model.WithMascotGlyph()
+	}
 	if _, err := tea.NewProgram(model).Run(); err != nil {
 		return fmt.Errorf("strip: %w", err)
 	}
@@ -393,7 +405,7 @@ func parseSort(raw string) (layout.Sort, error) {
 
 // runPickUI runs the chosen layout's Bubble Tea program and reports the
 // user's selection; ok is false when they cancelled.
-func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, styles *theme.Styles, client *tmux.Client, pane string, sortMode layout.Sort) (selection, bool, error) {
+func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, styles *theme.Styles, client *tmux.Client, pane string, sortMode layout.Sort, mascot bool) (selection, bool, error) {
 	switch inbuilt {
 	case layoutTelescope:
 		final, err := tea.NewProgram(palette.New(cmds, styles)).Run()
@@ -421,7 +433,11 @@ func runPickUI(inbuilt, layoutPath string, cmds []catalog.Command, styles *theme
 				return selection{}, false, fmt.Errorf("pick: %w", err)
 			}
 		}
-		final, err := tea.NewProgram(app.New(cmds, placements, styles)).Run()
+		deckModel := app.New(cmds, placements, styles)
+		if !mascot {
+			deckModel = deckModel.WithoutMascot()
+		}
+		final, err := tea.NewProgram(deckModel).Run()
 		if err != nil {
 			return selection{}, false, fmt.Errorf("pick: %w", err)
 		}
