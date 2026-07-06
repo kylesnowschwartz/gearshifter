@@ -92,12 +92,15 @@ CONTEXT/RESUME/CONFIG six-pack; the personalized example
 insert-tile, RADIO, RELOAD — its STYLE gear was REMOVED 2026-07-05:
 Claude Code dropped /output-style and /config rejects custom styles
 non-interactively; revival route = a /style command in the
-sc-output-styles plugin, DECK-CONTENT.md postscript). **M5 in flight:
-P1 theme seam, P2 tile states + nameplate buttons, P4 wordmark gradient
-SHIPPED (M5-AESTHETIC.md); P3 clawd mascot skipped for now; frame-dedup
+sc-output-styles plugin, DECK-CONTENT.md postscript). **M5 COMPLETE
+(P5 decided 2026-07-06): P1 theme seam, P2 tile states + nameplate
+buttons, P4 wordmark gradient SHIPPED (M5-AESTHETIC.md); frame-dedup
 refactor done (theme.FrameStyles + widget.tileFrame + one Styles.Armed
-role + theme.ApplySurface). Only P5 house palette remains — deferred
-until the maintainer wants to decide colors.** **Strip (STRIP-EMBED.md) steps 1–3
+role + theme.ApplySurface). P5: the P1 charcoal+clawd-orange stand-in
+was DECLARED the house palette as-is ("orangish, and plain, boom") —
+no designed-ramp session, DMG/PICO-8 alternates dropped;
+theme.go var renamed placeholder→house. P3 mascot revived under strip
+step 4 (below).** **Strip (STRIP-EMBED.md) steps 1–3
 SHIPPED (step 1 2026-07-05; steps 2–3 compact chip flow 2026-07-06
 after a full pre-merge review round): `gearshifter strip [--compact]`
 runs the deck as a persistent pane widget — app.PersistentHooks
@@ -116,8 +119,17 @@ events bounded by RENDERED rows; model badge arbitrates by transcript
 ENTRY time, not file mtime (agent-ouija v1.1.0 LastAssistantModelAt,
 pin bumped). Live as a tcm companion pane (tcm-side spec:
 tail-claude-mux/.agent-history/COMPANION-PANE-SPEC.md; the maintainer runs
-`--theme plain`). Steps 4–5 (clawd flourish, tcm embed docs) remain;
-parked perf notes in STRIP-EMBED.md.** Distribution is parked as M6
+`--theme plain`). Steps 4–5 in flight (2026-07-06 interview): step 5
+embed docs = README persistent-pane section (the maintainer's primary
+usage; manual install only — TPM QA explicitly skipped, "too much
+trouble for no users yet"); step 4 mascot = deck (P3 k9s recipe) +
+full strip (2–3-row variant authored at size) + OPT-IN compact footer
+glyph U+100CC0 (clawd-icon Clawd.ttf, ~/Code/dotfiles/clawd-icon —
+1-cell, inherits text color so it survives plain; own config path,
+EXEMPT from the chip-glyph EA-Neutral rule; renders tofu without the
+font, hence opt-in). NOT in compact rows (chips own every row) and no
+sprite under plain. Perf notes in STRIP-EMBED.md CLOSED ("perf seems
+fine").** Distribution is parked as M6
 until someone besides the maintainer wants an install. The deck is the default
 UI; a `run-shell .../gearshifter.tmux` line in tmux.conf owns the
 permanent `prefix+C-g` binding (`just bind-dev` sources the same
@@ -199,10 +211,10 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
 6. **M5 aesthetic (in flight, M5-AESTHETIC.md rev 2):** P1 theme seam,
    P2 tile states + nameplate buttons, P4 wordmark gradient SHIPPED;
    P3 clawd mascot skipped for now (k9s recipe documented for later);
-   structural frame-dedup done. Remaining: **P5 house palette only** —
-   a *designed* ramp palette per the TUI-AESTHETICS.md verdict (DMG /
-   PICO-8 demoted to optional retro themes), deferred until the maintainer wants
-   to decide colors.
+   structural frame-dedup done. **P5 DECIDED 2026-07-06, M5 COMPLETE:**
+   the P1 stand-in IS the house palette (see State above); the
+   TUI-AESTHETICS.md designed-ramp verdict and DMG/PICO-8 alternates
+   were dropped, not deferred.
 7. **M6 distribution (parked until an external user exists):** TPM
    bootstrap, goreleaser, CI, bump/release recipes; also parked: opt-in
    per-session effort shim (hook/statusline). The session-state package
@@ -211,13 +223,6 @@ Build order (ARCHITECTURE.md §8, supersedes SPEC §13 numbering):
 
 Open items:
 
-- **Font A/B test:** build two mock variants and compare — (A) custom bundled
-  TTF (clawd-icon `build-font.py` pattern; 1-cell pictograms, install +
-  detection + Unicode fallback) vs (B) fontless richer UI (Unicode+color
-  inline, sprites in block zones). Decision driver: information density per
-  screen and whether a 'condensed' layout exists. Glyphs win density;
-  sprites win portability/color.
-- House palette: DMG green vs PICO-8 (clawd's orange favors PICO-8), M5.
 - Per-session /effort display: no per-session disk source exists (only
   statusline stdin / hook payloads carry effort.level) — opt-in shim
   parked for M4+; gears show the global value meanwhile.

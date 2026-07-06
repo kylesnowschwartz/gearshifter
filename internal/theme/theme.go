@@ -280,11 +280,11 @@ func (s *Styles) ApplySurface(v *tea.View) {
 	v.ForegroundColor = s.Foreground
 }
 
-// placeholder is the P1 stand-in palette: neutral charcoal ramps plus
-// the clawd-orange accent. Suitable, not decided — the house palette is
-// M5 P5's business (M5-AESTHETIC.md); these values exist so the P2
-// layout work has honest contrast to test against.
-var placeholder = Palette{
+// house is the gearshifter house palette: neutral charcoal ramps plus
+// the clawd-orange accent. Started life as the P1 stand-in; declared
+// THE palette 2026-07-06 (M5 P5, M5-AESTHETIC.md) — it had already
+// survived every P2–P4 QA pass, so the decision was to keep it.
+var house = Palette{
 	FgBase:   lipgloss.Color("#E6E6EC"),
 	FgSubtle: lipgloss.Color("#B4B4C0"),
 	FgMuted:  lipgloss.Color("#78788A"),
@@ -305,7 +305,7 @@ var placeholder = Palette{
 
 // themes maps --theme / @gearshifter-theme names to registries.
 var themes = map[string]func() *Styles{
-	"default": func() *Styles { return New(placeholder) },
+	"default": func() *Styles { return New(house) },
 	"plain":   Plain,
 }
 
